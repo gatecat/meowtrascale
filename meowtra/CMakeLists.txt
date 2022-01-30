@@ -22,12 +22,13 @@ else()
     endif()
 endif()
 
-include_directories(src/ src/core/)
+include_directories(src/ src/core/ src/bit/)
 aux_source_directory(src/ SRC_FILES)
 aux_source_directory(src/core/ CORE_SRC_FILES)
+aux_source_directory(src/bit/ BIT_SRC_FILES)
 
 if( NOT CMAKE_BUILD_TYPE )
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_executable(meowtra ${SRC_FILES} ${CORE_SRC_FILES})
+add_executable(meowtra ${SRC_FILES} ${CORE_SRC_FILES} ${BIT_SRC_FILES})

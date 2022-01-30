@@ -1,0 +1,5 @@
+#include "bitstream.h"
+
+MEOW_NAMESPACE_BEGIN
+
+MEOW_NAMESPACE_END
