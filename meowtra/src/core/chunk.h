@@ -16,6 +16,8 @@ template <typename T> struct Chunk {
         index_t size() const { return length; }
         T get(index_t idx) const;
         void set(index_t idx, T value);
+        ref_window(Chunkable<T> &base, index_t offset, index_t length);
+        ref_window(const ref_window &other);
         ~ref_window();
     };
     struct fixed_zero {
@@ -32,7 +34,7 @@ template <typename T> struct Chunk {
     };
     std::variant<std::vector<T>, fixed_zero, ref_window> content;
     explicit Chunk(const std::vector<T> &data) : content(owned_data{data}) {};
-    explicit Chunk(Chunkable<T> &base, index_t offset, index_t length);
+    Chunk(Chunkable<T> &base, index_t offset, index_t length) : content(ref_window{base, offset, length}) {};
     static Chunk zeros(index_t size) {
         return Chunk(fixed_zero{size});
     }
@@ -48,7 +50,6 @@ template <typename T> struct Chunk {
     void set(index_t idx, T value) { 
         std::visit(content, [&](auto &&x) { x.set(idx, value); });
     }
-    ~Chunk();
 };
 
 template <typename T> struct Chunkable {
@@ -58,13 +59,20 @@ template <typename T> struct Chunkable {
 
     std::vector<T> &data() { return base; }
     const std::vector<T> &data() const { return base; }
+    Chunk<T> window(index_t offset, index_t length) {
+        return Chunk(*this, offset, length);
+    }
     ~Chunkable() {
         MEOW_ASSERT(refcount == 0);
     }
 };
 
-template <typename T> Chunk<T>::Chunk(Chunkable<T> &base, index_t offset, index_t length) : content(ref_window{base, offset, length}) {
+template <typename T> Chunk<T>::ref_window::ref_window(Chunkable<T> &base, index_t offset, index_t length) : base(base), offset(offset), length(length) {
     ++base.refcount;
+}
+
+template <typename T> Chunk<T>::ref_window::ref_window(const ref_window &other) : base(other.base), offset(other.offset), length(other.length) {
+    ++base.refcount;            
 }
 
 template <typename T> T Chunk<T>::ref_window::get(index_t idx) const {
