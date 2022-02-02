@@ -1,5 +1,6 @@
 #include "tools.h"
 #include "log.h"
+#include "datafile.h"
 
 #include <iostream>
 
