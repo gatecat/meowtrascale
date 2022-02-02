@@ -108,13 +108,19 @@ std::vector<BitstreamPacket> RawBitstream::packetise() {
                     if (expected_crc != curr_crc)
                         log_warning("CRC mismatch at %d: calculated %08x, read %08x\n", offset, curr_crc, expected_crc);
                     curr_crc = 0;
+                } else if (reg == BitstreamPacket::CMD && count == 1 && data.at(offset) == 0x7) {
+                    // reset CRC
+                    ++offset;
+                    curr_crc = 0;
                 } else if (count > 0) {
                     // create a packet
                     result.emplace_back(reg, words.window(offset, count));
                     // update calculated CRC
-                    for (int i = 0; i < count; i++)
+                    for (int i = 0; i < count; i++) {
                         curr_crc = icap_crc(reg, data.at(offset++), curr_crc);
+                    }
                 }
+
             } else {
                 log_error("unknown op %d in header %08x\n", op, hdr);
             }
