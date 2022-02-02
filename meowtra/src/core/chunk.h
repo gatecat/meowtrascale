@@ -32,7 +32,7 @@ template <typename T> struct Chunk {
         inline T get(index_t idx) const { return data.at(idx); }
         inline void set(index_t idx, T value) { data.at(idx) = value; }
     };
-    std::variant<std::vector<T>, fixed_zero, ref_window> content;
+    std::variant<owned_data, fixed_zero, ref_window> content;
     explicit Chunk(const std::vector<T> &data) : content(owned_data{data}) {};
     Chunk(Chunkable<T> &base, index_t offset, index_t length) : content(ref_window{base, offset, length}) {};
     static Chunk zeros(index_t size) {
@@ -42,13 +42,13 @@ template <typename T> struct Chunk {
         return Chunk(std::vector<T>(size));
     }
     index_t size() const { 
-        return std::visit(content, [](auto &&x) { return x.size(); });
+        return std::visit([] (auto &&x) -> index_t { return x.size(); }, content);
     }
     T get(index_t idx) const { 
-        return std::visit(content, [&](auto &&x) { return x.get(idx); });
+        return std::visit([&] (auto &&x) -> T { return x.get(idx); }, content);
     }
     void set(index_t idx, T value) { 
-        std::visit(content, [&](auto &&x) { x.set(idx, value); });
+        std::visit([&](auto &&x) { x.set(idx, value); }, content);
     }
 };
 

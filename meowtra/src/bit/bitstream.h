@@ -21,6 +21,8 @@ struct RawBitstream {
 };
 
 struct BitstreamPacket {
+    uint16_t slr;
+
     enum Reg : uint16_t {
         CRC     = 0b00000,
         FAR     = 0b00001,
@@ -45,7 +47,7 @@ struct BitstreamPacket {
 
     Chunk<uint32_t> payload;
 
-    BitstreamPacket(uint16_t reg, Chunk<uint32_t> payload) : reg(Reg(reg)), payload(payload) {};
+    BitstreamPacket(uint16_t slr, uint16_t reg, Chunk<uint32_t> payload) : slr(slr), reg(Reg(reg)), payload(payload) {};
 
     std::string header_str();
 };

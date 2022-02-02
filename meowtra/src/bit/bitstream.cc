@@ -81,6 +81,7 @@ std::vector<BitstreamPacket> RawBitstream::packetise() {
     index_t offset = 0;
     auto &data = words.base;
     uint16_t last_reg = 0;
+    uint16_t slr = 0;
     while (offset < int(data.size())) {
         uint32_t hdr = data.at(offset++);
         if (hdr == 0xFFFFFFFF) {
@@ -114,7 +115,7 @@ std::vector<BitstreamPacket> RawBitstream::packetise() {
                     curr_crc = 0;
                 } else if (count > 0) {
                     // create a packet
-                    result.emplace_back(reg, words.window(offset, count));
+                    result.emplace_back(slr, reg, words.window(offset, count));
                     // update calculated CRC
                     for (int i = 0; i < count; i++) {
                         curr_crc = icap_crc(reg, data.at(offset++), curr_crc);
@@ -128,7 +129,7 @@ std::vector<BitstreamPacket> RawBitstream::packetise() {
             // long packet
             index_t count = hdr & 0x3FFFFFF;
             log_verbose("long write %04x len=%d\n", last_reg, count);
-            result.emplace_back(last_reg, words.window(offset, count));
+            result.emplace_back(slr, last_reg, words.window(offset, count));
             for (int i = 0; i < count; i++)
                         curr_crc = icap_crc(last_reg, data.at(offset++), curr_crc);
         } else {
