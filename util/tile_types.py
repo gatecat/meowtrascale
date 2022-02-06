@@ -28,3 +28,5 @@ def get_size(tt):
         return (8, 15)
     if tt in ("CMT_L", "CMT_RIGHT", "CMT_LEFT_H"):
         return (12, 60)
+    return None
+
