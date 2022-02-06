@@ -65,19 +65,38 @@ def main():
             if len(seg) > 0:
                 bit_tiles[clk_row].append(seg)
     # Correlate between frames and tiles
-    for clk_row, col_segs in enumerate(bit_tiles):
-        bit_col = 0
-        if "xczu" in os.environ["MEOW_PART"]:
-            # TODO: don't hardcode offset for tiles eaten by the PS part
-            if clk_row <= 3:
-                bit_col = 0x56
-        for seg in col_segs:
-            t0, tt0 = seg[0]
-            if tt0.startswith("RCLK"):
-                continue # ignore RCLK-only...
-            width, height = get_size(tt0)
-            assert width == frame_colsegs[(row, bit_col)][1], (t0, width, frame_colsegs[(row, bit_col)])
-            bit_col += 1
-
+    with open(os.environ['MEOW_DEVDB'] + '/tile_bits.txt', 'w') as f:
+        for clk_row, col_segs in enumerate(bit_tiles):
+            bit_col = 0
+            if "xczu" in os.environ["MEOW_PART"]:
+                # TODO: don't hardcode offset for tiles eaten by the PS part
+                if clk_row <= 3:
+                    bit_col = 0x56
+            for seg in col_segs:
+                t0, tt0 = seg[0]
+                if tt0.startswith("RCLK"):
+                    continue # ignore RCLK-only...
+                w0, h0 = get_size(tt0)
+                frame, frame_width = frame_colsegs[(row, bit_col)]
+                assert w0 == frame_width, (t0, w0, frame, frame_width)
+                bit_col += 1
+                start_bit = 0
+                i = 0
+                while i < len(seg):
+                    ti, tti = seg[i]
+                    seg_height = 1
+                    i += 1
+                    while i < len(seg) and seg[i][1] == tti:
+                        i += 1
+                        seg_height += 1
+                    if tti.startswith("RCLK"):
+                        wi, hi = (w0, 1) # RCLK always height1
+                    else:
+                        wi, hi = get_size(tti)
+                    print(f"0x{frame:08x} +{frame_width} {ti} {hi}*{seg_height} {start_bit}", file=f)
+                    start_bit += (hi * seg_height * 48)
+                    if start_bit == 1488:
+                        # skip over ECC
+                        start_bit = 1536
 if __name__ == '__main__':
     main()
