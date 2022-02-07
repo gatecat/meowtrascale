@@ -2,6 +2,7 @@
 #include "bitstream.h"
 #include "cmdline.h"
 #include "log.h"
+#include "database.h"
 
 #include <fstream>
 
@@ -40,6 +41,7 @@ int subcmd_unpack(int argc, const char *argv[]) {
         auto packets = bit.packetise();
         if (result.named.count("frame-addrs"))
             dump_frame_adders(packets, out_stream);
+        get_db_root(); // for testing...
     }
     return 0;
 }
