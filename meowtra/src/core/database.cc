@@ -130,4 +130,12 @@ const std::string &get_db_root() {
     return db_root;
 }
 
+const Device *device_by_idcode(uint32_t idcode) {
+    for (const auto &dev : all_devices) {
+        if (dev.idcode == idcode)
+            return &dev;
+    }
+    return nullptr;
+}
+
 MEOW_NAMESPACE_END

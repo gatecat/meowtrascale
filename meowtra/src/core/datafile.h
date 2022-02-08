@@ -106,6 +106,10 @@ struct line_iterator {
     }
 };
 
+std::pair<std::string_view, std::string_view> split_view(std::string_view view, char delim);
+int32_t parse_i32(std::string_view view);
+uint32_t parse_u32(std::string_view view);
+
 MEOW_NAMESPACE_END
 
 #endif
