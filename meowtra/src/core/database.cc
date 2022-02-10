@@ -1,3 +1,4 @@
+#include "context.h"
 #include "database.h"
 #include "datafile.h"
 #include "log.h"
@@ -157,6 +158,41 @@ std::vector<FrameRange> get_device_frames(const Device &dev) {
         result.emplace_back(slr, frame, count);
     }
     std::sort(result.begin(), result.end());
+    return result;
+}
+
+std::vector<TileRegion> get_tile_regions(Context *ctx, const Device &dev) {
+    std::vector<TileRegion> result;
+    std::ifstream in(stringf("%s/%s/%s/tile_bits.txt", get_db_root().c_str(), dev.family.c_str(), dev.name.c_str()));
+    if (!in)
+        log_error("failed to open tile regions file for device '%s'\n", dev.name.c_str());
+    std::string buf(std::istreambuf_iterator<char>(in), {});
+    for (auto line : lines(buf)) {
+        if (line.begin() == line.end())
+            continue;
+        result.emplace_back();
+        auto &r = result.back();
+        auto i = line.begin();
+        r.slr = parse_u32(*i++);
+        r.start_frame = parse_u32(*i++);
+
+        auto frame_range = (*i++);
+        MEOW_ASSERT(frame_range.at(0) == '+');
+        r.tile_frames = parse_u32(frame_range.substr(1));
+
+        auto start_tile = split_view(*i++, '_', true);
+        r.prefix = ctx->id(std::string(start_tile.first));
+        MEOW_ASSERT(start_tile.second.at(0) == 'X');
+        auto start_xy = split_view(start_tile.second.substr(1), 'Y');
+        r.tile_x = parse_i32(start_xy.first);
+        r.tile_y0 = parse_i32(start_xy.second);
+
+        auto heights = split_view(*i++, '*');
+        r.tile_height = parse_u32(heights.first);
+        r.num_tiles = parse_u32(heights.second);
+
+        r.start_bit = parse_u32(*i++);
+    }
     return result;
 }
 

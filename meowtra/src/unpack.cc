@@ -1,5 +1,7 @@
 #include "tools.h"
 #include "bitstream.h"
+#include "tile.h"
+#include "context.h"
 #include "cmdline.h"
 #include "log.h"
 #include "database.h"
@@ -9,11 +11,20 @@
 MEOW_NAMESPACE_BEGIN
 
 namespace {
-void dump_frame_adders(const std::vector<BitstreamPacket> &packets, std::ostream &out) {
+void dump_frame_addrs(const std::vector<BitstreamPacket> &packets, std::ostream &out) {
     for (auto &packet : packets) {
         if (packet.reg != BitstreamPacket::FAR)
             continue;
         out << stringf("%d %08x\n", int(packet.slr), packet.payload.get(0));
+    }
+}
+void dump_tile_bits(Context *ctx, TileGrid grid, std::ostream &out) {
+    for (auto &t : grid.tiles) {
+        if (t.second.set_bits.empty())
+            continue;
+        out << ".tile " << t.first.str(ctx) << std::endl;
+        for (index_t b : t.second.set_bits)
+            out << stringf("%d_%d\n", b / t.second.bits, b % t.second.bits);
     }
 }
 }
@@ -40,10 +51,13 @@ int subcmd_unpack(int argc, const char *argv[]) {
     {
         auto packets = bit.packetise();
         if (result.named.count("frame-addrs")) {
-            dump_frame_adders(packets, out_stream);
+            dump_frame_addrs(packets, out_stream);
         } else {
             auto frames = packets_to_frames(packets);
             log_info("device: %s\n", frames.dev->name.c_str());
+            Context ctx;
+            auto grid = frames_to_tiles(&ctx, frames);
+            dump_tile_bits(&ctx, grid, out_stream);
         }
     }
     return 0;

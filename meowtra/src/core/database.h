@@ -40,12 +40,15 @@ struct TileRegion {
     IdString prefix;
     int16_t tile_x;
     int16_t tile_y0;
-    int16_t slr;
+    uint16_t slr;
     uint32_t start_frame;
     uint32_t start_bit;
     uint16_t tile_height;
     uint16_t tile_frames;
+    uint16_t num_tiles;
 };
+
+std::vector<TileRegion> get_tile_regions(Context *ctx, const Device &dev);
 
 MEOW_NAMESPACE_END
 

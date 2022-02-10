@@ -2,8 +2,8 @@
 
 MEOW_NAMESPACE_BEGIN
 
-std::pair<std::string_view, std::string_view> split_view(std::string_view view, char delim) {
-	auto pos = view.find(delim);
+std::pair<std::string_view, std::string_view> split_view(std::string_view view, char delim, bool rsplit) {
+	auto pos = rsplit ? view.rfind(delim) : view.find(delim);
 	MEOW_ASSERT(pos != std::string_view::npos);
 	return std::make_pair(
 		view.substr(0, pos),

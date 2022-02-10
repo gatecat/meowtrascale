@@ -93,7 +93,7 @@ def main():
                         wi, hi = (w0, 1) # RCLK always height1
                     else:
                         wi, hi = get_size(tti)
-                    print(f"0x{frame:08x} +{frame_width} {ti} {hi}*{seg_height} {start_bit}", file=f)
+                    print(f"0 0x{frame:08x} +{frame_width} {ti} {hi}*{seg_height} {start_bit}", file=f) # TODO: SLR
                     start_bit += (hi * seg_height * 48)
                     if start_bit == 1488:
                         # skip over ECC

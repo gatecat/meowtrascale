@@ -128,7 +128,7 @@ inline line_range lines(const std::string &buf) {
     return line_range(buf);
 }
 
-std::pair<std::string_view, std::string_view> split_view(std::string_view view, char delim);
+std::pair<std::string_view, std::string_view> split_view(std::string_view view, char delim, bool rsplit = false);
 int32_t parse_i32(std::string_view view);
 uint32_t parse_u32(std::string_view view);
 
