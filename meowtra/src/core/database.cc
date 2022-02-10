@@ -1,6 +1,9 @@
 #include "database.h"
+#include "datafile.h"
 #include "log.h"
 
+#include <iterator>
+#include <fstream>
 #include <filesystem>
 #include <vector>
 
@@ -136,6 +139,25 @@ const Device *device_by_idcode(uint32_t idcode) {
             return &dev;
     }
     return nullptr;
+}
+
+std::vector<FrameRange> get_device_frames(const Device &dev) {
+    std::vector<FrameRange> result;
+    std::ifstream in(stringf("%s/%s/%s/frame_regions.txt", get_db_root().c_str(), dev.family.c_str(), dev.name.c_str()));
+    if (!in)
+        log_error("failed to open frame ranges file for device '%s'\n", dev.name.c_str());
+    std::string buf(std::istreambuf_iterator<char>(in), {});
+    for (auto line : lines(buf)) {
+        if (line.begin() == line.end())
+            continue;
+        auto i = line.begin();
+        uint32_t slr = parse_u32(*i++);
+        uint32_t frame = parse_u32(*i++);
+        uint32_t count = parse_u32(*i++);
+        result.emplace_back(slr, frame, count);
+    }
+    std::sort(result.begin(), result.end());
+    return result;
 }
 
 MEOW_NAMESPACE_END

@@ -3,6 +3,7 @@
 
 #include "preface.h"
 #include "chunk.h"
+#include "hashlib.h"
 
 #include <vector>
 #include <string>
@@ -51,6 +52,23 @@ struct BitstreamPacket {
 
     std::string header_str();
 };
+
+struct Device;
+
+struct FrameKey {
+    uint32_t slr;
+    uint32_t frame;
+    bool operator==(const FrameKey &other) const { return slr == other.slr && frame == other.frame; }
+    bool operator!=(const FrameKey &other) const { return slr != other.slr || frame != other.frame; }
+    unsigned hash() const { return mkhash(slr, frame); }
+};
+
+struct BitstreamFrames {
+    const Device *dev = nullptr;;
+    dict<FrameKey, Chunk<uint32_t>> frame_data; 
+};
+
+BitstreamFrames packets_to_frames(const std::vector<BitstreamPacket> &packets);
 
 MEOW_NAMESPACE_END
 

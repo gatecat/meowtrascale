@@ -22,6 +22,31 @@ extern const std::vector<Device> all_devices;
 
 const Device *device_by_idcode(uint32_t idcode);
 
+struct FrameRange {
+    uint32_t slr;
+    uint32_t begin;
+    uint32_t count;
+    bool operator<(const FrameRange &f) const {
+        return slr < f.slr || (slr == f.slr && begin < f.begin);
+    }
+    bool operator==(const FrameRange &f) const {
+        return slr == f.slr && begin == f.begin;
+    }
+};
+
+std::vector<FrameRange> get_device_frames(const Device &dev);
+
+struct TileRegion {
+    IdString prefix;
+    int16_t tile_x;
+    int16_t tile_y0;
+    int16_t slr;
+    uint32_t start_frame;
+    uint32_t start_bit;
+    uint16_t tile_height;
+    uint16_t tile_frames;
+};
+
 MEOW_NAMESPACE_END
 
 #endif

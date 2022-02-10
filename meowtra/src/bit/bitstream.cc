@@ -1,5 +1,6 @@
 #include "bitstream.h"
 #include "log.h"
+#include "database.h"
 
 #include <array>
 
@@ -104,6 +105,7 @@ std::vector<BitstreamPacket> RawBitstream::packetise() {
                 if (reg == BitstreamPacket::CRC) {
                     // special case
                     MEOW_ASSERT(count > 0);
+                    result.emplace_back(slr, reg, words.window(offset, count)); // have to track CRC writes as they increment FAR?
                     offset += (count - 1);
                     uint32_t expected_crc = data.at(offset++);
                     if (expected_crc != curr_crc)
@@ -137,6 +139,69 @@ std::vector<BitstreamPacket> RawBitstream::packetise() {
         }
     }
     return result;
+}
+
+namespace {
+index_t get_frame_range(const std::vector<FrameRange> &ranges, uint32_t slr, uint32_t frame) {
+    index_t b = 0, e = index_t(ranges.size()) - 1;
+    while (b <= e) {
+        index_t i = (b + e) / 2;
+        auto &r = ranges.at(i);
+        if (slr == r.slr && frame >= r.begin && frame < (r.begin + r.count)) {
+            // match
+            return i;
+        }
+        if (r.slr > slr || ((slr == r.slr) && (r.begin + r.count) >= frame))
+            e = i - 1;
+        else
+            b = i + 1;
+    }
+    return -1;
+}
+
+uint32_t get_next_frame(const std::vector<FrameRange> &ranges, uint32_t slr, uint32_t frame) {
+    index_t ri = get_frame_range(ranges, slr, frame);
+    if (ri == -1)
+        return frame; // no match
+    auto &r = ranges.at(ri);
+    if (frame < (r.begin + r.count - 1))
+        return frame + 1; // inside range
+    else if (ri < (index_t(ranges.size()) - 1))
+        return ranges.at(ri+1).begin;
+    else
+        return frame; // end of regions
+}
+}
+
+BitstreamFrames packets_to_frames(const std::vector<BitstreamPacket> &packets) {
+    BitstreamFrames res;
+    uint32_t far = 0;
+    std::vector<FrameRange> frame_ranges;
+
+    const int frame_length = 93; // TODO: other devices than xcup
+
+    for (auto &packet : packets) {
+        if (packet.reg == BitstreamPacket::IDCODE && packet.payload.size() >= 1 && !res.dev) {
+            uint32_t idc = packet.payload.get(0);
+            res.dev = device_by_idcode(idc);
+            if (!res.dev)
+                log_error("no known device with IDCODE 0x%08x\n", idc);
+            frame_ranges = get_device_frames(*res.dev);
+        } else if (packet.reg == BitstreamPacket::FAR && packet.payload.size() >= 1) {
+            far = packet.payload.get(0);
+        } else if (packet.reg == BitstreamPacket::CRC) {
+            // increment FAR
+            far = get_next_frame(frame_ranges, packet.slr, far);
+        } else if (packet.reg == BitstreamPacket::FDRI) {
+            // TODO: check ECC etc
+            // TODO: split frames?
+            for (index_t i = 0; i < packet.payload.size(); i += 94) {
+                res.frame_data.emplace(FrameKey{packet.slr, far}, packet.payload.subchunk(i, std::max(94, packet.payload.size() - i)));
+                far = get_next_frame(frame_ranges, packet.slr, far);
+            }
+        }
+    }
+    return res;
 }
 
 MEOW_NAMESPACE_END

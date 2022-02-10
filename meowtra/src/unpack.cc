@@ -39,9 +39,12 @@ int subcmd_unpack(int argc, const char *argv[]) {
     auto bit = RawBitstream::read(in);
     {
         auto packets = bit.packetise();
-        if (result.named.count("frame-addrs"))
+        if (result.named.count("frame-addrs")) {
             dump_frame_adders(packets, out_stream);
-        get_db_root(); // for testing...
+        } else {
+            auto frames = packets_to_frames(packets);
+            log_info("device: %s\n", frames.dev->name.c_str());
+        }
     }
     return 0;
 }

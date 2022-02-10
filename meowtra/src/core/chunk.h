@@ -19,22 +19,33 @@ template <typename T> struct Chunk {
         ref_window(Chunkable<T> &base, index_t offset, index_t length);
         ref_window(const ref_window &other);
         ~ref_window();
+        ref_window subchunk(index_t offset, index_t len) const {
+            return ref_window(base, this->offset + offset, len);
+        }
     };
     struct fixed_zero {
         index_t m_size;
         inline index_t size() const { return m_size; }
         inline T get(index_t idx) const { MEOW_ASSERT(idx >= 0 && idx < m_size); return T(0); }
         inline void set(index_t idx, T value) { MEOW_ASSERT_FALSE("can't set fixed_zero data"); }
+        fixed_zero subchunk(index_t offset, index_t len) const {
+            return fixed_zero { len };
+        }
     };
     struct owned_data {
         std::vector<T> data;
         inline index_t size() const { return index_t(data.size()); }
         inline T get(index_t idx) const { return data.at(idx); }
         inline void set(index_t idx, T value) { data.at(idx) = value; }
+        owned_data subchunk(index_t offset, index_t len) const {
+            return owned_data { std::vector<T>(data.begin() + offset, data.begin() + offset + len) }; 
+        }
     };
     std::variant<owned_data, fixed_zero, ref_window> content;
     explicit Chunk(const std::vector<T> &data) : content(owned_data{data}) {};
     Chunk(Chunkable<T> &base, index_t offset, index_t length) : content(ref_window{base, offset, length}) {};
+    explicit Chunk(decltype(content) content) : content(content) {};
+
     static Chunk zeros(index_t size) {
         return Chunk(fixed_zero{size});
     }
@@ -49,6 +60,9 @@ template <typename T> struct Chunk {
     }
     void set(index_t idx, T value) { 
         std::visit([&](auto &&x) { x.set(idx, value); }, content);
+    }
+    Chunk subchunk(index_t offset, index_t len) const {
+        return std::visit([&] (auto &&x) -> Chunk<T> { return Chunk(x.subchunk(offset, len)); }, content);
     }
 };
 

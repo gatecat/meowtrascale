@@ -10,7 +10,7 @@ MEOW_NAMESPACE_BEGIN
 
 // Simple, easily version-controllable and mergeable, data file format
 struct word_iterator {
-    word_iterator(const std::string &buf, const index_t pos) : buf(buf), pos(-1) {
+    word_iterator(const std::string &buf, const index_t pos) : buf(buf), pos(pos) {
         if (pos != -1)
             skip();
     };
@@ -48,6 +48,7 @@ struct word_iterator {
         return end;
     }
     std::string_view operator*() const {
+        MEOW_ASSERT(pos != -1);
         return std::string_view(buf.begin() + pos, buf.begin() + get_end());
     }
     void operator++() {
@@ -55,6 +56,13 @@ struct word_iterator {
         end_cache = -1; // because we updated pos
         skip();
     }
+    word_iterator operator++(int) {
+        auto last = *this;
+        ++(*this);
+        return last;
+    }
+    bool operator==(const word_iterator &other) const { return pos == other.pos; }
+    bool operator!=(const word_iterator &other) const { return pos != other.pos; }
 };
 
 struct word_range {
@@ -66,7 +74,7 @@ struct word_range {
 };
 
 struct line_iterator {
-    line_iterator(const std::string &buf, const index_t pos) : buf(buf), pos(-1) {
+    line_iterator(const std::string &buf, const index_t pos) : buf(buf), pos(pos) {
         if (pos != -1)
             skip();
     };
@@ -104,7 +112,21 @@ struct line_iterator {
         pos = get_end();
         skip();
     }
+    bool operator==(const line_iterator &other) const { return pos == other.pos; }
+    bool operator!=(const line_iterator &other) const { return pos != other.pos; }
 };
+
+struct line_range {
+    explicit line_range(const std::string &buf, index_t offset = 0) : buf(buf), offset(offset) {};
+    const std::string &buf;
+    index_t offset;
+    line_iterator begin() { return line_iterator(buf, offset); }
+    line_iterator end() { return line_iterator(buf, -1); }
+};
+
+inline line_range lines(const std::string &buf) {
+    return line_range(buf);
+}
 
 std::pair<std::string_view, std::string_view> split_view(std::string_view view, char delim);
 int32_t parse_i32(std::string_view view);
