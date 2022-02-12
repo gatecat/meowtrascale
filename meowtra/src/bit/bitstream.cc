@@ -195,7 +195,7 @@ BitstreamFrames packets_to_frames(const std::vector<BitstreamPacket> &packets) {
         } else if (packet.reg == BitstreamPacket::FDRI) {
             // TODO: check ECC etc
             // TODO: split frames?
-            for (index_t i = 0; i < packet.payload.size(); i += 94) {
+            for (index_t i = 0; i < packet.payload.size(); i += frame_length) {
                 res.frame_data.emplace(FrameKey{packet.slr, far}, packet.payload.subchunk(i, std::max(94, packet.payload.size() - i)));
                 far = get_next_frame(frame_ranges, packet.slr, far);
             }
