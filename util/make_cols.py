@@ -77,7 +77,7 @@ def main():
                 if tt0.startswith("RCLK"):
                     continue # ignore RCLK-only...
                 w0, h0 = get_size(tt0)
-                frame, frame_width = frame_colsegs[(row, bit_col)]
+                frame, frame_width = frame_colsegs[(clk_row, bit_col)]
                 assert w0 == frame_width, (t0, w0, frame, frame_width)
                 bit_col += 1
                 start_bit = 0
