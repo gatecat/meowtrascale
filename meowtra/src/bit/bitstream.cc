@@ -99,7 +99,7 @@ std::vector<BitstreamPacket> RawBitstream::packetise() {
             } else if (op == 0x02) {
                 // WRITE
                 uint16_t reg = (hdr >> 13U) & 0x3FFFU;
-                index_t count = hdr & 0x3FFU;
+                index_t count = hdr & 0x1FFFU;
                 last_reg = reg;
                 log_verbose("write %04x len=%d\n", reg, count);
                 if (reg == BitstreamPacket::CRC) {
