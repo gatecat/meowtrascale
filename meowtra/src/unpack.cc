@@ -5,6 +5,7 @@
 #include "cmdline.h"
 #include "log.h"
 #include "database.h"
+#include "constids.h"
 
 #include <fstream>
 
@@ -18,10 +19,16 @@ void dump_frame_addrs(const std::vector<BitstreamPacket> &packets, std::ostream 
         out << stringf("%d %08x\n", int(packet.slr), packet.payload.get(0));
     }
 }
-void dump_tile_bits(Context *ctx, TileGrid grid, std::ostream &out) {
+void dump_tile_bits(Context *ctx, TileGrid grid, std::ostream &out, bool skip_default_logic = true) {
+    static const pool<index_t> empty_logic_tile = {0, 8, 16, 24, 32, 40, 192, 200, 208, 216, 224, 232, 384, 392, 416, 424};
+
     for (auto &t : grid.tiles) {
         if (t.second.set_bits.empty())
             continue;
+        if (skip_default_logic && t.first.prefix.in(id_CLEL_L, id_CLEL_R, id_CLEM, id_CLEM_R)) {
+            if (t.second.set_bits == empty_logic_tile)
+                continue;
+        }
         out << ".tile " << t.first.str(ctx) << std::endl;
         for (index_t b : t.second.set_bits)
             out << stringf("%d_%d\n", b / t.second.bits, b % t.second.bits);
