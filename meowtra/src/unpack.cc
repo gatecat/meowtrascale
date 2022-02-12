@@ -67,6 +67,10 @@ int subcmd_unpack(int argc, const char *argv[]) {
             dump_tile_bits(&ctx, grid, out_stream);
         }
     }
+    if (out_file) {
+        out_file->close();
+        delete out_file;
+    }
     return 0;
 }
 
