@@ -4,6 +4,7 @@ class Tilegrid:
     def __init__(self):
         self.tiles = {}
         self.tile_sites = {}
+        self.site_in_tile = None
         self.width = 0
         self.height = 0
         self.clock_width = 0
@@ -30,3 +31,24 @@ class Tilegrid:
         assert cr[0] == 'X'
         x, y = cr[1:].split('Y')
         return int(x), int(y)
+    def parse_site(self, site):
+        prefix, _, xy = site.rpartition('_')
+        assert xy[0] == 'X'
+        x, y = xy[1:].split('Y')
+        return prefix, int(x), int(y)
+    def lookup_site(self, site):
+        if self.site_in_tile is None:
+            self.site_in_tile = {}
+            for tile, sites in self.tile_sites.items():
+                split_sites = [self.parse_site(x[0]) for x in sites]
+                # compute relative site coordinates in tile
+                min_xy = {}
+                for prefix, x, y in split_sites:
+                    if prefix not in min_xy:
+                        min_xy[prefix] = (x, y)
+                    else:
+                        min_xy[prefix] = (min(min_xy[prefix][0], x), min(min_xy[prefix][1], y))
+                for tile_site, (prefix, x, y) in zip(sites, split_sites):
+                    self.site_in_tile[tile_site[0]] = (tile, (x - min_xy[prefix][0]), (y - min_xy[prefix][1]))
+        return self.site_in_tile[site]
+
