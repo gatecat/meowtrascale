@@ -27,7 +27,12 @@ foreach net [get_nets] {
 	foreach pip [get_pips -of_objects $net] {
 		set n0 [get_nodes -uphill -of_objects $pip ]
 		set n1 [get_nodes -downhill -of_objects $pip ]
-		puts $fp ".pip $pip $n0 $n1 [get_property IS_PSEUDO $pip]"
+		puts -nonewline $fp ".pip $pip $n0 $n1 "
+		if {[get_property IS_INVERTED $pip] == 1} { puts -nonewline $fp "N" }
+		if {[get_property IS_FIXED_INVERSION $pip] == 1} { puts -nonewline $fp "I" }
+		if {[get_property IS_DIRECTIONAL $pip] == 0} { puts -nonewline $fp "B" }
+		if {[get_property IS_PSEUDO $pip] == 1} { puts -nonewline $fp "P" }
+		puts $fp ""
 		foreach wire [get_wires -of_objects $n1] {
 			puts $fp ".drv_wire $wire"
 		}
