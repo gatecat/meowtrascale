@@ -35,8 +35,8 @@ TileGrid frames_to_tiles(Context *ctx, const BitstreamFrames &frames) {
                         t.set_bits.insert(f * t.bits + j);
                     }
                     bit++;
-                    if (bit == 1488)
-                        bit = 1536; //skip ECC
+                    if (bit == 1440)
+                        bit = 1488; //skip ECC
                 }
             }
         }

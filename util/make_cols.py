@@ -95,8 +95,8 @@ def main():
                         wi, hi = get_size(tti)
                     print(f"0 0x{frame:08x} +{frame_width} {ti} {hi}*{seg_height} {start_bit}", file=f) # TODO: SLR
                     start_bit += (hi * seg_height * 48)
-                    if start_bit == 1488:
+                    if start_bit == 1440:
                         # skip over ECC
-                        start_bit = 1536
+                        start_bit = 1488
 if __name__ == '__main__':
     main()

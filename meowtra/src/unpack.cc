@@ -20,6 +20,7 @@ void dump_frame_addrs(const std::vector<BitstreamPacket> &packets, std::ostream 
     }
 }
 void dump_tile_bits(Context *ctx, TileGrid grid, std::ostream &out, bool skip_default_logic = true) {
+    // 0_8, 0_16, 0_24, 0_32, 0_40; 4_0, 4_8, 4_16, 4_24, 4_32, 4_40, 8_0, 8_8, 8_32, 8_40
     static const pool<index_t> empty_logic_tile = {0, 8, 16, 24, 32, 40, 192, 200, 208, 216, 224, 232, 384, 392, 416, 424};
 
     for (auto &t : grid.tiles) {

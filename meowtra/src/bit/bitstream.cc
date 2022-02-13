@@ -179,6 +179,7 @@ BitstreamFrames packets_to_frames(const std::vector<BitstreamPacket> &packets) {
     std::vector<FrameRange> frame_ranges;
 
     const int frame_length = 93; // TODO: other devices than xcup
+    int null_frame_count = 0;
 
     for (auto &packet : packets) {
         if (packet.reg == BitstreamPacket::IDCODE && packet.payload.size() >= 1 && !res.dev) {
@@ -196,8 +197,23 @@ BitstreamFrames packets_to_frames(const std::vector<BitstreamPacket> &packets) {
             // TODO: check ECC etc
             // TODO: split frames?
             for (index_t i = 0; i < packet.payload.size(); i += frame_length) {
-                res.frame_data.emplace(FrameKey{packet.slr, far}, packet.payload.subchunk(i, std::max(94, packet.payload.size() - i)));
-                far = get_next_frame(frame_ranges, packet.slr, far);
+                if (null_frame_count > 0) {
+                    for (index_t j = i; i < std::min(frame_length, packet.payload.size() - i); j++) {
+                        uint32_t val = packet.payload.get(j);
+                        if (val != 0)
+                            log_error("non-null word %d %08x in expected null %d/2 before frame %d.%08x\n",
+                                (j-i), val, null_frame_count, packet.slr, far);
+                    }
+                    --null_frame_count;
+                } else {
+                    res.frame_data.emplace(FrameKey{packet.slr, far}, packet.payload.subchunk(i, std::min(frame_length, packet.payload.size() - i)));
+                    auto next_far = get_next_frame(frame_ranges, packet.slr, far);
+                    if ((far ^ next_far) >> 18U) {
+                        // end of a row
+                        null_frame_count = 2;
+                    }
+                    far = next_far;
+                }
             }
         }
     }
