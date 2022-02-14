@@ -5,7 +5,7 @@ class Property:
         if "'h" in self.value:
             return int(self.value.split("'h")[1], 16)
         elif "'b" in self.value:
-            return int(self.value.split("'h")[1], 2)
+            return int(self.value.split("'b")[1], 2)
         else:
             return int(self.value)
 

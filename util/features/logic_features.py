@@ -12,6 +12,7 @@ def logic_features(des):
         clkinv = [False, False]
         srinv  = [False, False]
         ffsync = [False, False]
+        latch = [False, False]
         haveff = [False, False]
         srused = [False, False, False, False]
         ceused = [False, False, False, False]
@@ -77,6 +78,67 @@ def logic_features(des):
                             if (init & (1 << init_idx)) == 0:
                                 continue
                             f.add(f"{prefix}.INIT[{i}]")
+            elif "FF" in b:
+                if cell.cell_type[0:2] == "FD" and cell.cell_type[3] == "E":
+                    is_latch = False
+                    clkpin = "C"
+                    cepin = "CE"
+                    if cell.cell_type[2] == "P":
+                        is_sync = False
+                        srval = 1
+                        srpin = "PRE"
+                    elif cell.cell_type[2] == "C":
+                        is_sync = False
+                        srval = 0
+                        srpin = "CLR"
+                    elif cell.cell_type[2] == "S":
+                        is_sync = True
+                        srval = 1
+                        srpin = "S"
+                    elif cell.cell_type[2] == "R":
+                        is_sync = True
+                        srval = 0
+                        srpin = "R"
+                elif cell.cell_type[0:2] == "LD" and cell.cell_type[3] == "E":
+                    is_latch = True
+                    clkpin = "G"
+                    cepin = "GE"
+                    if cell.cell_type[2] == "P":
+                        is_sync = False
+                        srval = 1
+                        srpin = "PRE"
+                    elif cell.cell_type[2] == "C":
+                        is_sync = False
+                        srval = 0
+                        srpin = "CLR"
+                else:
+                    continue
+                prim = "LATCH" if is_latch else "FF"
+                if "INIT" in cell.props:
+                    f.add(f"{t}.{b}.{prim}.INIT.{cell.props['INIT'].parse()}")
+                f.add(f"{t}.{b}.{prim}.SRVAL.{srval}")
+                half = 1 if b[0] in "EFGH" else 0
+                two = 1 if b[-1] == "2" else 0
+                latch[half] = is_latch
+                ffsync[half] = is_sync
+                clkinv[half] = f"IS_{clkpin}_INVERTED" in cell.props and cell.props[f"IS_{clkpin}_INVERTED"].parse() == 1
+                srinv[half] = f"IS_{srpin}_INVERTED" in cell.props and cell.props[f"IS_{srpin}_INVERTED"].parse() == 1
+                haveff[half] = True
+                srused[half * 2 + two] = srpin in cell.pins
+                ceused[half * 2 + two] = cepin in cell.pins
+        for i in range(2):
+            # site-wide ff config
+            if not haveff[i]:
+                continue
+            half = "EFGHFF" if i == 1 else "ABCDFF"
+            prim = "LATCH" if is_latch else "FF"
+            f.add(f"{t}.{half}.{prim}")
+            f.add(f"{t}.{half}.{prim}.CLKINV.{int(clkinv[i])}")
+            f.add(f"{t}.{half}.{prim}.SRINV.{int(srinv[i])}")
+            if ffsync[i]: f.add(f"{t}.{half}.{prim}.SYNC")
+            for j in range(2):
+                if srused[i * 2 + j]: f.add(f"{t}.{half}{'2' if j == 1 else ''}.SRUSED")
+                if ceused[i * 2 + j]: f.add(f"{t}.{half}{'2' if j == 1 else ''}.CEUSED")
     return f
 
 if __name__ == '__main__':
