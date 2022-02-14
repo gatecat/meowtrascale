@@ -18,19 +18,32 @@ class Cell:
         self.name = name
         self.props = {}
         self.pins = {}
+        self._phys_pins = None
         self.bels = []
 
     @property
     def cell_type(self):
-        return self.props["REF_NAME"]
+        return self.props["REF_NAME"].value
+
+    @property
+    def phys_pins(self):
+        if self._phys_pins is None:
+            self._phys_pins = {}
+            for l, phys in self.pins.items():
+                for p in phys:
+                    if p not in self._phys_pins:
+                        self._phys_pins[p] = []
+                    self._phys_pins[p].append(l)
+        return self._phys_pins
 
     @property
     def is_leaf(self):
-        return self.props["PRIMITIVE_LEVEL"] == "LEAF"
+        return self.props["PRIMITIVE_LEVEL"].value == "LEAF"
 
     @property
     def bel(self):
-        assert len(self.bels) == 1
+        if len(self.bels) != 1:
+            return None
         return self.bels[0]
 
 class Pip:
@@ -110,6 +123,7 @@ class Design:
                     des.sites[sl[1]] = Site(sl[1])
                 curr = des.sites[sl[1]]
                 is_site = True
+        return des
 
 if __name__ == '__main__':
     import sys
