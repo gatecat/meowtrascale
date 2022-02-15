@@ -18,6 +18,7 @@ class Cell:
         self.name = name
         self.props = {}
         self.pins = {}
+        self.conns = {}
         self._phys_pins = None
         self.bels = []
 
@@ -80,6 +81,7 @@ class Site:
         self.name = name
         self.pips = []
         self.cells = {}
+        self.pins = {}
 
 class Design:
     def __init__(self):
@@ -99,6 +101,8 @@ class Design:
                 curr.props[sl[1]] = Property(" ".join(sl[2:]))
             elif sl[0] == '.pin':
                 curr.pins[sl[1].rpartition('/')[-1]] = [x.rpartition('/')[-1] for x in sl[2:]]
+            elif sl[0] == '.conn':
+                curr.conns[sl[1].rpartition('/')[-1]] = sl[2] if len(sl) >= 3 and sl[2].strip() != "" else None
             elif sl[0] == '.bel':
                 bel = Bel(sl[1])
                 curr.bels.append(bel)
@@ -123,6 +127,8 @@ class Design:
                     des.sites[sl[1]] = Site(sl[1])
                 curr = des.sites[sl[1]]
                 is_site = True
+            elif sl[0] == '.sitepin':
+                curr.pins[sl[1].rpartition('/')[-1]] = sl[2] if len(sl) >= 3 and sl[2].strip() != "" else None
         return des
 
 if __name__ == '__main__':

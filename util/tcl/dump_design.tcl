@@ -18,6 +18,7 @@ foreach cell [get_cells] {
 	}
 	foreach pin [get_pins -of_objects $cell] {
 		puts $fp ".pin $pin [get_bel_pins -of_objects $pin]"
+		puts $fp ".conn $pin [get_nets -of_objects $pin]"
 	}
 }
 
@@ -43,6 +44,9 @@ foreach site [get_sites -filter { IS_USED == 1 } ] {
 	puts $fp ".site [get_property NAME $site]"
 	foreach pip [get_site_pips -filter { IS_USED == 1 } -of_objects $site] {
 		puts $fp ".pip $pip"
+	}
+	foreach pin [get_site_pins -filter { IS_USED == 1 } -of_objects $site] {
+		puts $fp ".sitepin $pin [get_nets -of_objects $pin]"
 	}
 }
 close $fp
