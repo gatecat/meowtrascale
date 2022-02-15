@@ -126,6 +126,26 @@ def logic_features(des):
                 haveff[half] = True
                 srused[half * 2 + two] = srpin in cell.pins
                 ceused[half * 2 + two] = cepin in cell.pins
+            elif "CARRY8" in b:
+                if cell.cell_type != "CARRY8":
+                    continue
+                if "CARRY_TYPE" in cell.props:
+                    f.add(f"{t}.{b}.CARRY_TYPE.{cell.props['CARRY_TYPE'].value}")
+                carry_pins = ["CI", "DI[0]", "DI[1]", "DI[2]", "DI[3]", "DI[4]", "DI[5]", "DI[6]", "DI[7]", "CI_TOP"]
+                for p in carry_pins:
+                    if p not in cell.conns or cell.conns[p] is None:
+                        continue # no logical net
+                    if p in cell.pins and len(cell.pins[p]) > 0:
+                        phys = cell.pins[p][0]
+                        pn = p.replace('[', '').replace(']', '')
+                        f.add(f"{t}.{b}.{pn}.{phys}")
+                    elif p in ('CI', 'CI_TOP'):
+                        n = cell.conns[p]
+                        if n == 'GLOBAL_LOGIC0':
+                            f.add(f"{t}.{b}.{p}.0")
+                        elif n == 'GLOBAL_LOGIC1':
+                            f.add(f"{t}.{b}.{p}.1")
+
         for i in range(2):
             # site-wide ff config
             if not haveff[i]:
