@@ -46,7 +46,7 @@ foreach site [get_sites -filter { IS_USED == 1 } ] {
 		puts $fp ".pip $pip"
 	}
 	foreach pin [get_site_pins -filter { IS_USED == 1 } -of_objects $site] {
-		puts $fp ".sitepin $pin [get_nets -of_objects $pin]"
+		puts $fp ".sitepin $pin [get_property DIRECTION $pin] [get_nodes -of_objects $pin] [get_nets -of_objects $pin]"
 	}
 }
 close $fp

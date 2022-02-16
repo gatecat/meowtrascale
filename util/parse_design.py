@@ -52,6 +52,8 @@ class Pip:
         self.tile, name = name.split('/')
         name = name.split('.')[1]
         self.wire0, self.wire1 = name.split('->')
+        if self.wire0.endswith('<<'):
+            self.wire0 = self.wire0[:-2]
         if self.wire1[0] == '>':
             self.wire1 = self.wire1[1:]
         self.node0 = node0
@@ -71,10 +73,18 @@ class Net:
         self.route = None
         self.pips = []
         self.driven_wires = []
+        self.pins = []
 
 class SitePip:
     def __init__(self, name):
         self.bel, self.inp = name.split('/')[1].split(':')
+
+class SitePin:
+    def __init__(self, name, direction, node, net):
+        self.site, self.name = name.split('/')
+        self.direction = direction
+        self.node = node if node != "" else None
+        self.net = net if net != "" else None
 
 class Site:
     def __init__(self, name):
@@ -128,7 +138,10 @@ class Design:
                 curr = des.sites[sl[1]]
                 is_site = True
             elif sl[0] == '.sitepin':
-                curr.pins[sl[1].rpartition('/')[-1]] = sl[2] if len(sl) >= 3 and sl[2].strip() != "" else None
+                pin = SitePin(sl[1], sl[2], sl[3].strip() if len(sl) >= 4 else "", sl[4].strip() if len(sl) >= 5 else "")
+                curr.pins[pin.name] = pin
+                if pin.net is not None and pin.net in des.nets:
+                    des.nets[pin.net].pins.append(pin)
         return des
 
 if __name__ == '__main__':
