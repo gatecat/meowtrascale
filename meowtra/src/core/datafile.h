@@ -18,7 +18,7 @@ struct word_iterator {
     index_t pos = -1; // -1 is the EOL flag
     void skip() {
         while (true) {
-            if (pos >= buf.size()) { // EOF
+            if (pos >= index_t(buf.size())) { // EOF
                 pos = -1;
                 break;
             }

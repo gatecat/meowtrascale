@@ -3,11 +3,23 @@
 #include "context.h"
 #include "database.h"
 #include "bitstream.h"
+#include "datafile.h"
 
 MEOW_NAMESPACE_BEGIN
 
 std::string TileKey::str(const Context *ctx) const {
     return stringf("%s_X%dY%d", prefix.c_str(ctx), x, y);
+}
+
+TileKey TileKey::parse(Context *ctx, const std::string_view &s) {
+    TileKey result;
+    auto split = split_view(s, '_', true);
+    result.prefix = ctx->id(std::string(split.first));
+    MEOW_ASSERT(split.second.at(0) == 'X');
+    auto start_xy = split_view(split.second.substr(1), 'Y');
+    result.x = int16_t(parse_i32(start_xy.first));
+    result.y = int16_t(parse_i32(start_xy.second));
+    return result;
 }
 
 TileGrid frames_to_tiles(Context *ctx, const BitstreamFrames &frames) {
