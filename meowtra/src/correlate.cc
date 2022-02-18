@@ -7,6 +7,7 @@
 #include "database.h"
 #include "constids.h"
 #include "feature.h"
+#include "specimen.h"
 
 #include <fstream>
 #include <thread>
@@ -46,7 +47,7 @@ struct CorrelateWorker {
     }
 
     void parse_files() {
-        log_info("loading %d bitstream+feature pairs\n", int(file_prefices.size()));
+        log_info("loading %d bitstream+feature pairs...\n", int(file_prefices.size()));
         tile_bits.resize(file_prefices.size());
         tile_feats.resize(file_prefices.size());
         std::vector<std::thread> threads;
@@ -57,9 +58,71 @@ struct CorrelateWorker {
             th.join();
     }
 
+    void filter_tiles() {
+        std::vector<std::string_view> tile_rules;
+        if (args.named.count("tiles")) {
+            std::string_view tr(args.named.at("tiles").at(0));
+            while(true) {
+                size_t pos = tr.find(',');
+                if (pos == std::string_view::npos) {
+                    tile_rules.push_back(tr);
+                    break;
+                } else {
+                    tile_rules.push_back(tr.substr(0, pos));
+                    tr = tr.substr(pos + 1);
+                }
+            }
+        }
+        pool<IdString> all_tiletypes;
+        for (const auto &fs : tile_feats) {
+            for (const auto &entry : fs.tiles) {
+                all_tiletypes.insert(entry.first.prefix);
+            }
+        }
+        if (tile_rules.empty()) { // include everything
+            included_tiletypes = all_tiletypes;
+        } else {
+            for (auto tt : all_tiletypes) {
+                const std::string &tt_str = tt.str(&ctx);
+                for (auto rule : tile_rules) {
+                    if (rule == tt_str) {
+                        included_tiletypes.insert(tt);
+                    } else if (rule.at(rule.size() - 1) == '*' && rule.substr(0, rule.size() - 1) == tt_str.substr(0, rule.size() - 1)) {
+                        included_tiletypes.insert(tt);
+                    }
+                }
+            }
+        }
+    }
+
+    void do_correlate(IdString tt) {
+        SpecimenGroup group;
+        for (index_t i = 0; i < tile_bits.size(); i++) {
+            auto &bits = tile_bits.at(i);
+            auto &feats = tile_feats.at(i);
+            for (auto &feat_tile : feats.tiles) {
+                if (feat_tile.first.prefix != tt)
+                    continue;
+                if (!bits.tiles.count(feat_tile.first))
+                    continue;
+                auto bit_tile = bits.tiles.at(feat_tile.first);
+                group.tile_bits = bit_tile.bits;
+                group.specs.emplace_back(feat_tile.second, bit_tile.set_bits);
+            }
+        }
+        if (group.specs.empty())
+            return;
+        log_info("processing tile type %s...\n", tt.c_str(&ctx));
+        group.find_deps();
+        group.solve(&ctx);
+    }
+
     void run() {
         find_files();
         parse_files();
+        filter_tiles();
+        for (auto tt : included_tiletypes)
+            do_correlate(tt);
     }
 
     Context ctx;

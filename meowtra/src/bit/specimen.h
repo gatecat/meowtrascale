@@ -17,7 +17,9 @@ struct SpecimenData {
 struct SpecimenGroup {
     std::vector<SpecimenData> specs;
     dict<Feature, pool<Feature>> dependencies;
+    int tile_bits = 48;
     void find_deps();
+    void solve(Context *ctx);
 };
 
 MEOW_NAMESPACE_END
