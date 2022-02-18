@@ -3,10 +3,12 @@
 #include <stdlib.h>
 #include <string>
 #include <iostream>
+#include <mutex>
 
 MEOW_NAMESPACE_BEGIN
 
 bool verbose_flag = false;
+static std::mutex log_mutex;
 
 std::string vstringf(const char *fmt, va_list ap)
 {
@@ -49,6 +51,7 @@ std::string stringf(const char *format, ...)
 
 void logv(const char *prefix, const char *format, va_list ap)
 {
+    std::unique_lock lock(log_mutex);
     std::string str = vstringf(format, ap);
     if (str.empty())
         return;

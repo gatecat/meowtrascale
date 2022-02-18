@@ -9,7 +9,7 @@ USING_MEOW_NAMESPACE;
 int main(int argc, char *argv[]) {
     auto top_help = [&]() {
         std::cerr << "Usage: ";
-        std::cerr << argv[0] << " <unpack|pack> <options>" << std::endl;
+        std::cerr << argv[0] << " <unpack|pack|correlate> <options>" << std::endl;
     };
     if (argc < 2) {
         top_help();
@@ -18,6 +18,8 @@ int main(int argc, char *argv[]) {
     std::string subcommand(argv[1]);
     if (subcommand == "unpack") {
         return subcmd_unpack(argc, (const char**)argv);
+    } else if (subcommand == "correlate") {
+        return subcmd_correlate(argc, (const char**)argv);
     } else if (subcommand == "pack") {
         MEOW_ASSERT_FALSE("unimplemented!");
     } else {

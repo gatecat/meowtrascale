@@ -3,6 +3,8 @@ project(meowtra CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 if (MSVC)
     set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
@@ -32,3 +34,4 @@ if( NOT CMAKE_BUILD_TYPE )
 endif()
 
 add_executable(meowtra ${SRC_FILES} ${CORE_SRC_FILES} ${BIT_SRC_FILES})
+target_link_libraries(meowtra PRIVATE Threads::Threads)
