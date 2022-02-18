@@ -54,6 +54,7 @@ void SpecimenGroup::solve(Context *ctx) {
                     for (auto dep_bit : result.at(dep))
                         set_with_feature.erase(dep_bit);
                 }
+                found = true;
             } else {
                 to_remove.clear();
                 // remove candidates not set in this specimen
@@ -71,6 +72,11 @@ void SpecimenGroup::solve(Context *ctx) {
         feat.first.write(ctx, std::cout);
         for (auto bit : feat.second)
             std::cout << " " << (bit / tile_bits) << "_" << (bit % tile_bits);
+        std::cout << " # deps: ";
+        for (auto dep : dependencies.at(feat.first)) {
+            dep.write(ctx, std::cout);
+            std::cout << ", ";
+        }
         std::cout << std::endl;
     }
 }

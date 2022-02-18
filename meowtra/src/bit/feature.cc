@@ -8,7 +8,7 @@ Feature Feature::parse(Context *ctx, std::string_view view) {
     if (br_pos == std::string_view::npos) {
         return Feature(ctx->id(std::string(view)));
     } else {
-        IdString base = ctx->id(std::string(view.substr(br_pos)));
+        IdString base = ctx->id(std::string(view.substr(0, br_pos)));
         index_t idx = parse_i32(view.substr(br_pos + 1, view.size() - (br_pos + 2)));
         return Feature(base, idx);
     }

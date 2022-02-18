@@ -105,7 +105,7 @@ struct CorrelateWorker {
                     continue;
                 if (!bits.tiles.count(feat_tile.first))
                     continue;
-                auto bit_tile = bits.tiles.at(feat_tile.first);
+                auto &bit_tile = bits.tiles.at(feat_tile.first);
                 group.tile_bits = bit_tile.bits;
                 group.specs.emplace_back(feat_tile.second, bit_tile.set_bits);
             }
