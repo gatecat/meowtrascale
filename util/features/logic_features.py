@@ -47,9 +47,9 @@ def logic_features(des):
                 if "INIT" in cell.props:
                     # skip writing INIT features if both LUTs present
                     has_56lut = False
-                    if "6LUT" in b and any(c.bel == b.replace('6', '5') for c in site.cells.values()):
+                    if "6LUT" in b and any(c.bel is not None and c.bel.bel == b.replace('6', '5') for c in site.cells.values()):
                         has_56lut = True
-                    if "5LUT" in b and any(c.bel == b.replace('5', '6') for c in site.cells.values()):
+                    if "5LUT" in b and any(c.bel is not None and c.bel.bel == b.replace('5', '6') for c in site.cells.values()):
                         has_56lut = True
                     if not has_56lut and cell.cell_type.startswith("LUT"):
                         init = cell.props["INIT"].parse()
@@ -60,7 +60,7 @@ def logic_features(des):
                                 # look at log to phys mapping to depermute init
                                 if (i & (1 << j)) == 0:
                                     continue
-                                log = cell.phys_pins.get(f'A{i+1}', [])
+                                log = cell.phys_pins.get(f'A{j+1}', [])
                                 if len(log) == 0:
                                     continue
                                 log = log[0]
