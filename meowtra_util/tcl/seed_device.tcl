@@ -21,3 +21,19 @@ foreach t [get_tiles] {
 	puts $f ""
 }
 close $f
+
+# Write out IO pin data
+set f [open $::env(MEOW_WORK)/raw_io.txt w]
+foreach p [get_package_pins] {
+	set s [lindex [get_sites -of_objects $p] 0]
+	if {$s == ""} { continue } 
+	puts -nonewline $f "[get_property NAME $p],[get_property BANK $p],[get_property PIN_FUNC $p],[get_property NAME $s],[get_property SITE_TYPE $s]"
+	foreach prop [list_property $p] {
+		if {[string range $prop 0 2] != "IS_"} { continue }
+		if {[get_property $prop $p] != 1} { continue }
+		puts -nonewline $f ",[string range $prop 3 1000]"
+	}
+	puts $f ""
+}
+
+close $f

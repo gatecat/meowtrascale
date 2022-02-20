@@ -51,4 +51,8 @@ class Tilegrid:
                 for tile_site, (prefix, x, y) in zip(sites, split_sites):
                     self.site_in_tile[tile_site[0]] = (tile, (x - min_xy[prefix][0]), (y - min_xy[prefix][1]))
         return self.site_in_tile[site]
-
+    def sites_by_type(self, site_type):
+        result = []
+        for _, sites in sorted(self.tile_sites.items(), key=lambda x: x[0]):
+            result += [s for s, st in sites if st == site_in_tile]
+        return result
