@@ -54,5 +54,5 @@ class Tilegrid:
     def sites_by_type(self, site_type):
         result = []
         for _, sites in sorted(self.tile_sites.items(), key=lambda x: x[0]):
-            result += [s for s, st in sites if st == site_in_tile]
+            result += [s for s, st in sites if st == site_type]
         return result

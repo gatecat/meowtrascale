@@ -198,7 +198,7 @@ BitstreamFrames packets_to_frames(const std::vector<BitstreamPacket> &packets) {
             // TODO: split frames?
             for (index_t i = 0; i < packet.payload.size(); i += frame_length) {
                 if (null_frame_count > 0) {
-                    for (index_t j = i; i < std::min(frame_length, packet.payload.size() - i); j++) {
+                    for (index_t j = i; j < std::min(frame_length, packet.payload.size() - i); j++) {
                         uint32_t val = packet.payload.get(j);
                         if (val != 0)
                             log_error("non-null word %d %08x in expected null %d/2 before frame %d.%08x\n",
@@ -208,7 +208,7 @@ BitstreamFrames packets_to_frames(const std::vector<BitstreamPacket> &packets) {
                 } else {
                     res.frame_data.emplace(FrameKey{packet.slr, far}, packet.payload.subchunk(i, std::min(frame_length, packet.payload.size() - i)));
                     auto next_far = get_next_frame(frame_ranges, packet.slr, far);
-                    if ((far ^ next_far) >> 18U) {
+                    if ((far ^ next_far) >> 18U && packet.payload.size() != frame_length) {
                         // end of a row
                         null_frame_count = 2;
                     }

@@ -10,6 +10,9 @@ class Pin:
         self.site = sl[4]
         self.flags = set(sl[5:])
 
+    def __str__(self):
+        return self.name
+
     @property
     def general(self):
         return "GENERAL_PURPOSE" in self.flags
@@ -26,6 +29,8 @@ class DeviceIO:
                 sl = line.strip()
                 if "," not in sl:
                     continue
+                pin = Pin(line)
+                self.pins[pin.name] = pin
         self.avail_io = [p for _, p in sorted(self.pins.items(), key=lambda x: x[0]) if p.general and not p.global_clk]
         self.avail_clk = [p for _, p in sorted(self.pins.items(), key=lambda x: x[0]) if p.general and p.global_clk]
     def next_io(self):
