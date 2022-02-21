@@ -39,15 +39,15 @@ proc dump_design {out_name} {
 				puts $fp ".drv_wire $wire"
 			}
 		}
+		foreach pin [get_site_pins -of_objects $net] {
+			puts $fp ".sitepin $pin [get_property DIRECTION $pin] [get_nodes -of_objects $pin]"
+		}
 	}
 
 	foreach site [get_sites -filter { IS_USED == 1 } ] {
 		puts $fp ".site [get_property NAME $site]"
 		foreach pip [get_site_pips -filter { IS_USED == 1 } -of_objects $site] {
 			puts $fp ".pip $pip"
-		}
-		foreach pin [get_site_pins -filter { IS_USED == 1 } -of_objects $site] {
-			puts $fp ".sitepin $pin [get_property DIRECTION $pin] [get_nodes -of_objects $pin] [get_nets -of_objects $pin]"
 		}
 	}
 	close $fp

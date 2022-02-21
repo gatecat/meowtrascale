@@ -84,7 +84,7 @@ class SitePin:
         self.site, self.name = name.split('/')
         self.direction = direction
         self.node = node if node != "" else None
-        self.net = net if net != "" else None
+        self.net = net
 
 class Site:
     def __init__(self, name):
@@ -138,10 +138,11 @@ class Design:
                 curr = des.sites[sl[1]]
                 is_site = True
             elif sl[0] == '.sitepin':
-                pin = SitePin(sl[1], sl[2], sl[3].strip() if len(sl) >= 4 else "", sl[4].strip() if len(sl) >= 5 else "")
-                curr.pins[pin.name] = pin
-                if pin.net is not None and pin.net in des.nets:
-                    des.nets[pin.net].pins.append(pin)
+                pin = SitePin(sl[1], sl[2], sl[3].strip() if len(sl) >= 4 else "", curr.name)
+                curr.pins.append(pin)
+                if pin.site not in des.sites:
+                    des.sites[pin.site] = Site(pin.site)
+                des.sites[pin.site].pins[pin.name] = pin
         return des
 
 if __name__ == '__main__':
