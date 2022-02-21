@@ -67,13 +67,21 @@ void SpecimenGroup::solve(Context *ctx) {
             result[feat] = set_with_feature;
         }
     }
-    for (auto &feat : result) {
+    // sort nicely
+    std::vector<Feature> to_print(to_solve.begin(), to_solve.end());
+
+    std::sort(to_print.begin(), to_print.end(), [&](const Feature &a, const Feature &b) {
+        const auto &sa = a.base.str(ctx), &sb = b.base.str(ctx);
+        return (sa < sb) || ((sa == sb) && a.bit < b.bit);
+    });
+
+    for (auto feat : to_print) {
         // TODO: save properly
-        feat.first.write(ctx, std::cout);
-        for (auto bit : feat.second)
+        feat.write(ctx, std::cout);
+        for (auto bit : result.at(feat))
             std::cout << " " << (bit / tile_bits) << "_" << (bit % tile_bits);
         std::cout << " # deps: ";
-        for (auto dep : dependencies.at(feat.first)) {
+        for (auto dep : dependencies.at(feat)) {
             dep.write(ctx, std::cout);
             std::cout << ", ";
         }

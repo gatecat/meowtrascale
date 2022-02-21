@@ -124,8 +124,8 @@ def logic_features(des):
                 clkinv[half] = f"IS_{clkpin}_INVERTED" in cell.props and cell.props[f"IS_{clkpin}_INVERTED"].parse() == 1
                 srinv[half] = f"IS_{srpin}_INVERTED" in cell.props and cell.props[f"IS_{srpin}_INVERTED"].parse() == 1
                 haveff[half] = True
-                srused[half * 2 + two] = srpin in cell.pins
-                ceused[half * 2 + two] = cepin in cell.pins
+                srused[half * 2 + two] = srpin in cell.pins and len(cell.pins[srpin]) > 0
+                ceused[half * 2 + two] = cepin in cell.pins and len(cell.pins[cepin]) > 0
             elif "CARRY8" in b:
                 if cell.cell_type != "CARRY8":
                     continue
@@ -151,14 +151,18 @@ def logic_features(des):
             if not haveff[i]:
                 continue
             half = "EFGHFF" if i == 1 else "ABCDFF"
-            prim = "LATCH" if is_latch else "FF"
+            prim = "LATCH" if latch[i] else "FF"
             f.add(f"{t}.{half}.{prim}")
             f.add(f"{t}.{half}.{prim}.CLKINV.{int(clkinv[i])}")
-            f.add(f"{t}.{half}.{prim}.SRINV.{int(srinv[i])}")
             if ffsync[i]: f.add(f"{t}.{half}.{prim}.SYNC")
             for j in range(2):
-                if srused[i * 2 + j]: f.add(f"{t}.{half}{'2' if j == 1 else ''}.SRUSED")
+                if srused[i * 2 + j]:
+                    f.add(f"{t}.{half}{'2' if j == 1 else ''}.SRUSED")
+                    f.add(f"{t}.{half}.{prim}.SRINV.{int(srinv[i])}")
                 if ceused[i * 2 + j]: f.add(f"{t}.{half}{'2' if j == 1 else ''}.CEUSED")
+        for pip in site.pips:
+            if "INV" in pip.bel: continue
+            f.add(f"{t}.{pip.bel}.{pip.inp}")
     return f
 
 if __name__ == '__main__':

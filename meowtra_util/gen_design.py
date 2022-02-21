@@ -33,6 +33,8 @@ class Net:
     def __init__(self, name):
         self.name = name
         self.pins = set()
+        self.params = {}
+
     def add_cell_pin(self, name, pin):
         self.pins.add(f"{name}/{pin}")
     def add_top_pin(self, name):
@@ -40,7 +42,8 @@ class Net:
     def write(self, f):
         print(f"set n [create_net {self.name}]", file=f)
         print(f"connect_net -net $n -objects {{{' '.join(sorted(self.pins))}}}", file=f)
-
+        for param, value in sorted(self.params.items(), key=lambda x: x[0]):
+            print(f"set_property {param} {value} $n", file=f)
 class Design:
     def __init__(self):
         self.objs = []
@@ -83,6 +86,7 @@ class Design:
             print(f'create_project -force -part {os.environ["MEOW_PART"]} {design}_{seed} {design}_{seed}', file=f)
             print(f'link_design', file=f)
             self.write(f)
+            print(f'write_checkpoint -force {design}_{seed}_preroute.dcp', file=f)
             print(f'place_design', file=f)
             print(f'route_design', file=f)
             print(f'set_property SEVERITY Warning [get_drc_checks]', file=f)
