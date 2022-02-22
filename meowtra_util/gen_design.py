@@ -10,9 +10,9 @@ class CellInst:
         self.pins = []
     def write(self, f):
         print(f"set c [create_cell -reference {self.cell_type} {self.name}]", file=f)
-        print(f"place_cell $c {self.bel}", file=f)
         for param, value in sorted(self.params.items(), key=lambda x: x[0]):
             print(f"set_property {param} {value} $c", file=f)
+        print(f"place_cell $c {self.bel}", file=f)
         if "/" in str(self.bel):
             print(f"set_property IS_BEL_FIXED 1 $c", file=f)
         else:
@@ -80,13 +80,15 @@ class Design:
         self.add(net)
         return net
 
-    def generate(self, design, seed, do_route=True):
+    def generate(self, design, seed, do_route=True, do_opt=False):
         Path("work").mkdir(parents=True, exist_ok=True)
         with open(f'work/{design}_{seed}.tcl', 'w') as f:
             print(f'create_project -force -part {os.environ["MEOW_PART"]} {design}_{seed} {design}_{seed}', file=f)
             print(f'link_design', file=f)
             self.write(f)
             print(f'write_checkpoint -force {design}_{seed}_preroute.dcp', file=f)
+            if do_opt:
+                print(f'opt_design', file=f)
             print(f'place_design', file=f)
             print(f'route_design', file=f)
             print(f'set_property SEVERITY Warning [get_drc_checks]', file=f)
@@ -96,3 +98,22 @@ class Design:
             print(f'write_bitstream -force {design}_{seed}.bit', file=f)
             print(f'source $::env(MEOW_UTIL)/tcl/dump_design.tcl', file=f)
             print(f'dump_design {design}_{seed}.dump', file=f)
+
+def generate_verilog_tcl(design, verilog, seed, top="top"):
+    Path("work").mkdir(parents=True, exist_ok=True)
+    with open(f'work/{design}_{seed}.v', 'w') as f:
+        f.write(verilog)
+    with open(f'work/{design}_{seed}.tcl', 'w') as f:
+        print(f'create_project -force -part {os.environ["MEOW_PART"]} {design}_{seed} {design}_{seed}', file=f)
+        print(f'read_verilog {os.getcwd()}/work/{design}_{seed}.v', file=f)
+        print(f'link_design -top {top}', file=f)
+        print(f'write_checkpoint -force {design}_{seed}_preroute.dcp', file=f)
+        print(f'place_design', file=f)
+        print(f'route_design', file=f)
+        print(f'set_property SEVERITY Warning [get_drc_checks]', file=f)
+        print(f'set_property BITSTREAM.GENERAL.PERFRAMECRC YES [current_design]', file=f)
+        print(f'write_checkpoint -force {design}_{seed}.dcp', file=f)
+        print(f'write_edif -force {design}_{seed}.edf', file=f)
+        print(f'write_bitstream -force {design}_{seed}.bit', file=f)
+        print(f'source $::env(MEOW_UTIL)/tcl/dump_design.tcl', file=f)
+        print(f'dump_design {design}_{seed}.dump', file=f)
