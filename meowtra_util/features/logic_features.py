@@ -43,7 +43,7 @@ def logic_features(des):
                 elif "DI1" in cell.phys_pins:
                     f.add(f"{prefix}.DI1.DI1")
                 if "RAM" in cell.cell_type or "SRL" in cell.cell_type and "IS_CLK_INVERTED" in cell.props:
-                    f.add(f"{prefix}.LCLKINV.{cell.props['IS_CLK_INVERTED'].parse()}")
+                    f.add(f"{t}.LCLKINV.{cell.props['IS_CLK_INVERTED'].parse()}")
                 if "INIT" in cell.props:
                     # skip writing INIT features if both LUTs present
                     has_56lut = False

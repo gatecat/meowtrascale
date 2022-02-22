@@ -39,7 +39,7 @@ def build(seed):
         we = get_ctlsig()
         ram32 = r.random() > 0.75
         wa_width = 5 if ram32 else r.randint(6, 9)
-        num_luts = 2 if ram32 and r.random() > 0.5 else 0
+        num_luts = 2 if ram32 and r.random() > 0.5 else 1
         wa = [get_sig() for k in range(wa_width)]
 
         for m in range(num_luts):
@@ -47,12 +47,14 @@ def build(seed):
             output.params["CLOCK_DEDICATED_ROUTE"] = "FALSE"
             lut = CellInst(f"lut{i}H{m}", "RAMS32" if ram32 else "RAMS64E1", f"{site}/H5LUT" if m == 1 else f"{site}/H6LUT")
             lut.params["IS_CLK_INVERTED"] = clkinv
+            lut.params["keep"] = 1
+            lut.params["dont_touch"] = 1
             clk.add_cell_pin(lut.name, "CLK")
             we.add_cell_pin(lut.name, "WE")
             get_sig().add_cell_pin(lut.name, "I")
             output.add_cell_pin(lut.name, "O")
             for k, inp in enumerate(wa):
-                inp.add_cell_pin(lut.name, f"WA{k}" if k >= 6 else f"ADR{k}")
+                inp.add_cell_pin(lut.name, f"WADR{k}" if k >= 6 else f"ADR{k}")
                 # lut.pins.append((f'ADR{k}', f'A{k + 1}'))
             sig_nets.append(output)
             des.add(lut)
@@ -66,19 +68,21 @@ def build(seed):
                 output.params["CLOCK_DEDICATED_ROUTE"] = "FALSE"
                 if ram32:
                     prim = "RAMD32"
-                elif wa_width == 9:
+                elif wa_width == 8:
                     prim = "RAMS64E1"
                 else:
                     prim = "RAMD64E"
                 lut = CellInst(f"lut{i}{j}{m}", prim, f"{site}/{j}5LUT" if m == 1 else f"{site}/{j}6LUT")
                 lut.params["IS_CLK_INVERTED"] = clkinv
+                lut.params["keep"] = 1
+                lut.params["dont_touch"] = 1
                 clk.add_cell_pin(lut.name, "CLK")
                 we.add_cell_pin(lut.name, "WE")
                 get_sig().add_cell_pin(lut.name, "I")
                 output.add_cell_pin(lut.name, "O")
                 if prim == "RAMS64E1":
                     for k, inp in enumerate(wa):
-                        inp.add_cell_pin(lut.name, f"WA{k}" if k >= 6 else f"ADR{k}")
+                        inp.add_cell_pin(lut.name, f"WADR{k}" if k >= 6 else f"ADR{k}")
                         # if k < 6:
                         #    lut.pins.append((f'ADR{k}', f'A{k + 1}'))
                 else:
