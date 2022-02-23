@@ -16,8 +16,7 @@ class CellInst:
             print(f"place_cell $c {self.bel}", file=f)
             if "/" in str(self.bel):
                 print(f"set_property IS_BEL_FIXED 1 $c", file=f)
-            else:
-                print(f"set_property IS_LOC_FIXED 1 $c", file=f)
+            print(f"set_property IS_LOC_FIXED 1 $c", file=f)
         if len(self.pins) > 0:
             print(f"set_property LOCK_PINS {{{' '.join(f'{k}:{v}' for k, v in self.pins)}}} $c", file=f)
 class TopPort:
@@ -48,6 +47,8 @@ class Net:
 class Design:
     def __init__(self):
         self.objs = []
+        self.site_pip_fuzz = []
+
     def add(self, obj):
         self.objs.append(obj)
     def write(self, f):
@@ -81,6 +82,9 @@ class Design:
         self.add(net)
         return net
 
+    def add_site_pip_fuzzer(self, site):
+        self.site_pip_fuzz.append(site)
+
     def generate(self, design, seed, do_route=True, do_opt=False):
         Path("work").mkdir(parents=True, exist_ok=True)
         with open(f'work/{design}_{seed}.tcl', 'w') as f:
@@ -92,6 +96,10 @@ class Design:
                 print(f'opt_design', file=f)
             print(f'place_design', file=f)
             print(f'route_design', file=f)
+            if len(self.site_pip_fuzz) > 0:
+                print(f'source $::env(MEOW_UTIL)/tcl/fuzz_site_pips.tcl', file=f)
+                for site in self.site_pip_fuzz:
+                    print(f'fuzz_site_pips [get_sites {site}]', file=f)
             print(f'set_property SEVERITY Warning [get_drc_checks]', file=f)
             print(f'set_property BITSTREAM.GENERAL.PERFRAMECRC YES [current_design]', file=f)
             print(f'write_checkpoint -force {design}_{seed}.dcp', file=f)

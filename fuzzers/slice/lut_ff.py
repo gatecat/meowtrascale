@@ -7,7 +7,7 @@ from meowtra_util.device_io import DeviceIO
 N_in = 16
 N_out = 16
 N_glb = 16
-N_slice = 2000
+N_slice = 1000
 
 def build(seed):
     r = Random(seed)
@@ -57,6 +57,8 @@ def build(seed):
                 sig_nets.append(output)
                 lut = CellInst(f"lut{i}{j}", "LUT6", f"{site}/{j}6LUT")
                 lut.params["INIT"] = f"64'h{r.randrange((1<<64)):016x}"
+                lut.params["keep"] = 1
+                lut.params["dont_touch"] = 1
                 for k, inp in enumerate(inputs):
                     lut.pins.append((f'I{k}', f'A{6-k}'))
                     inp.add_cell_pin(lut.name, f"I{k}")
@@ -75,6 +77,8 @@ def build(seed):
                 clk.add_cell_pin(ff.name, clkpin)
                 ff.params[f"IS_{clkpin}_INVERTED"] = clkinv
                 ff.params[f"INIT"] = r.choice(["1'b1", "1'b0"])
+                ff.params["keep"] = 1
+                ff.params["dont_touch"] = 1
                 if sr is not None:
                     srpin = get_srpin(fftype)
                     sr.add_cell_pin(ff.name, srpin)
@@ -90,7 +94,7 @@ def build(seed):
     for i in range(N_out):
         des.add_io(f"o{i}", "OUT", pins.next_io(), sig_nets[-(i+1)])
 
-    des.generate("lut_ff", seed)
+    des.generate("lut_ff", seed, do_opt=True)
 
 if __name__ == '__main__':
     build(int(sys.argv[1]))
