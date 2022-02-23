@@ -12,11 +12,12 @@ class CellInst:
         print(f"set c [create_cell -reference {self.cell_type} {self.name}]", file=f)
         for param, value in sorted(self.params.items(), key=lambda x: x[0]):
             print(f"set_property {param} {value} $c", file=f)
-        print(f"place_cell $c {self.bel}", file=f)
-        if "/" in str(self.bel):
-            print(f"set_property IS_BEL_FIXED 1 $c", file=f)
-        else:
-            print(f"set_property IS_LOC_FIXED 1 $c", file=f)
+        if self.bel != "":
+            print(f"place_cell $c {self.bel}", file=f)
+            if "/" in str(self.bel):
+                print(f"set_property IS_BEL_FIXED 1 $c", file=f)
+            else:
+                print(f"set_property IS_LOC_FIXED 1 $c", file=f)
         if len(self.pins) > 0:
             print(f"set_property LOCK_PINS {{{' '.join(f'{k}:{v}' for k, v in self.pins)}}} $c", file=f)
 class TopPort:

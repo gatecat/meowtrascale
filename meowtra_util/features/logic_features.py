@@ -4,6 +4,13 @@ from ..tilegrid import Tilegrid
 def logic_features(des):
     f = set()
     g = Tilegrid()
+    vcc_nets = set()
+    gnd_nets = set()
+    for cell in des.cells.values():
+        if cell.cell_type == "GND" and "G" in cell.conns:
+            gnd_nets.add(cell.conns["G"])
+        if cell.cell_type == "VCC" and "P" in cell.conns:
+            vcc_nets.add(cell.conns["P"])
     for site in des.sites.values():
         if not site.name.startswith("SLICE_"):
             continue
@@ -141,9 +148,9 @@ def logic_features(des):
                         f.add(f"{t}.{b}.{pn}.{phys}")
                     elif p in ('CI', 'CI_TOP'):
                         n = cell.conns[p]
-                        if n == 'GLOBAL_LOGIC0':
+                        if n in gnd_nets:
                             f.add(f"{t}.{b}.{p}.0")
-                        elif n == 'GLOBAL_LOGIC1':
+                        elif n in vcc_nets:
                             f.add(f"{t}.{b}.{p}.1")
 
         for i in range(2):
