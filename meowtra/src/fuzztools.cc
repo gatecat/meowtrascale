@@ -24,7 +24,8 @@ struct FuzzGenWorker {
 
     struct TileTypeData {
         IdString name;
-        index_t covered_pips = 0;
+        index_t tried_pips = 0;
+        index_t success_pips = 0;
         index_t pip_count = 0;
         idict<TileKey> tile_insts;
         std::vector<std::vector<index_t>> tile_pips;
@@ -62,9 +63,11 @@ struct FuzzGenWorker {
             auto &tt = tile_types.at(i);
             if (tt.pip_count == 0)
                 continue;
-            double coverage = double(tt.covered_pips) / double(tt.pip_count);
-            if (coverage < lowest_coverage)
+            double coverage = double(tt.tried_pips) / double(tt.pip_count);
+            if (coverage < lowest_coverage || ((coverage == lowest_coverage) && rng.rng(2))) {
                 next = i;
+                lowest_coverage = coverage;
+            }
         }
         MEOW_ASSERT(next != -1);
         return next;
@@ -107,12 +110,12 @@ struct FuzzGenWorker {
         return string_pool.at(string_pool_idx++).c_str();
     }
 
-    const int iter_limit = 100000;
+    const int iter_limit = 500000;
 
     bool do_route(int net_idx) {
         index_t tti = get_next_tiletype();
         auto &tt = tile_types.at(tti);
-        ++tt.covered_pips;
+        ++tt.tried_pips;
         index_t pip = get_next_pip(tt);
         if (pip == -1)
             return false;
@@ -210,7 +213,13 @@ struct FuzzGenWorker {
             auto &bwd_pip = graph.pips.at(visited_bwd.at(bwd_cursor));
             bwd_cursor = bwd_pip.dst_node;
         }
+        ++tt.success_pips;
         return true;
+    }
+
+    void print_coverage() {
+        for (auto &tt : tile_types)
+            log_info("%30s %6d %6d\n", tt.name.c_str(&ctx), tt.success_pips, tt.pip_count);
     }
 
     int operator()() {
@@ -219,9 +228,9 @@ struct FuzzGenWorker {
         else
             rng.rngseed(1);
         setup_tiletypes();
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 50000; i++)
             do_route(i);
-
+        print_coverage();
         return 0;
     }
 };
