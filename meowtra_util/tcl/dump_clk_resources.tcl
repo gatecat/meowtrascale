@@ -11,7 +11,7 @@ proc do_visit {node depth} {
 	global f
 	global visited
 
-	if { $depth > 4 } {
+	if { $depth > 5 } {
 		return
 	}
 	if { [info exists visited($node)] } {
@@ -29,7 +29,7 @@ proc do_visit {node depth} {
 		}
 
 		incr pip_count
-		if {$pip_count > 4} {
+		if {$pip_tt == "INT" && $pip_count > 2} {
 			break
 		}
 
@@ -37,10 +37,8 @@ proc do_visit {node depth} {
 		do_visit [get_nodes -uphill -of_objects $pip] [expr $depth+1]
 		do_visit [get_nodes -downhill -of_objects $pip] [expr $depth+1]
 	}
-	if { $depth > 0 } {
-		foreach site_pin [get_site_pins -of_objects $node] {
-			puts $f "extpin $site_pin $node"
-		}
+	foreach site_pin [get_site_pins -of_objects $node] {
+		puts $f "extpin $site_pin $node"
 	}
 }
 

@@ -57,6 +57,7 @@ struct FuzzGenWorker {
     }
 
     index_t get_next_tiletype() {
+#if 0
         index_t next = -1;
         double lowest_coverage = std::numeric_limits<double>::max();
         for (index_t i = 0; i < index_t(tile_types.size()); i++) {
@@ -71,6 +72,9 @@ struct FuzzGenWorker {
         }
         MEOW_ASSERT(next != -1);
         return next;
+#else
+        return rng.rng(tile_types.size());
+#endif
     }
 
     dict<index_t, index_t> node2net; 
