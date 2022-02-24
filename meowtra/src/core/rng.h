@@ -77,6 +77,11 @@ struct DeterministicRNG
         std::sort(a.begin(), a.end());
         shuffle(a);
     }
+
+    template <typename T> const T& choice(const std::vector<T> &a) {
+        MEOW_ASSERT(!a.empty());
+        return a.at(rng(int(a.size())));
+    }
 };
 
 MEOW_NAMESPACE_END
