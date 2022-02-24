@@ -10,9 +10,9 @@
 MEOW_NAMESPACE_BEGIN
 
 struct TileKey {
-    IdString prefix;
-    int16_t x;
-    int16_t y;
+    IdString prefix = IdString();
+    int16_t x = -1;
+    int16_t y = -1;
 
     bool operator==(const TileKey &other) const { return prefix == other.prefix && x == other.x && y == other.y; }
     bool operator!=(const TileKey &other) const { return prefix != other.prefix || x != other.x || y != other.y; }

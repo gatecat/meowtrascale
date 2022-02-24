@@ -9,6 +9,7 @@ int subcmd_unpack(int argc, const char *argv[]);
 // int subcmd_pack(int argc, const char *argv[]);
 // ...
 int subcmd_correlate(int argc, const char *argv[]);
+int subcmd_fuzztools(int argc, const char *argv[]);
 
 MEOW_NAMESPACE_END
 
