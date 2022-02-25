@@ -139,9 +139,14 @@ struct FuzzGenWorker {
             queue_fwd.pop();
             auto &cursor_node = graph.nodes.at(cursor);
             if (!cursor_node.pins.empty()) {
-                // TODO: check pin is actually usable and how we'd use it....
-                fwd_endpoint = cursor;
-                break;
+                for (auto &pin : cursor_node.pins) {
+                    if (!process_sitepin(net_idx, pin, true))
+                        continue;
+                    fwd_endpoint = cursor;
+                    break;
+                }
+                if (fwd_endpoint != -1)
+                    break;
             }
             for (index_t pip_dh : cursor_node.pips_downhill) {
                 if (used_pips.count(pip_dh))
@@ -175,9 +180,14 @@ struct FuzzGenWorker {
             queue_bwd.pop();
             auto &cursor_node = graph.nodes.at(cursor);
             if (!cursor_node.pins.empty()) {
-                // TODO: check pin is actually usable and how we'd use it....
-                bwd_startpoint = cursor;
-                break;
+                for (auto &pin : cursor_node.pins) {
+                    if (!process_sitepin(net_idx, pin, false))
+                        continue;
+                    bwd_startpoint = cursor;
+                    break;
+                }
+                if (bwd_startpoint != -1)
+                    break;
             }
             for (index_t pip_uh : cursor_node.pips_uphill) {
                 if (used_pips.count(pip_uh))
@@ -228,25 +238,42 @@ struct FuzzGenWorker {
 
     bool add_net_pin(int net, TileKey site, IdString bel, IdString cell_type, IdString cell_pin) {
         // TODO
+#if 1
+        auto site_str = site.str(&ctx);
+        log_verbose("adding pin %s/%s/%s on net %d\n", site_str.c_str(), bel.c_str(&ctx), cell_pin.c_str(&ctx), net);
+#endif
         return true;
     }
 
     bool process_sitepin(int net, SitePin pin, bool is_input) {
         TileKey site = pin.site;
-        if (site.prefix == id_BUFGCE || site.prefix == id_BUFGCE_DIV) {
+        if (site.prefix.in(id_BUFGCE, id_BUFGCE_DIV, id_BUFG_PS, id_BUFG_GT)) {
             if (pin.pin == id_CE_PRE_OPTINV && is_input)
                 return add_net_pin(net, site, site.prefix, site.prefix, id_CE);
             if (pin.pin == id_CLK_IN && is_input)
                 return add_net_pin(net, site, site.prefix, site.prefix, id_I);
             if (pin.pin == id_CLK_OUT && !is_input)
                 return add_net_pin(net, site, site.prefix, site.prefix, id_O);
+        } else if (site.prefix == id_BUFGCE_HDIO) {
+            if (pin.pin == id_CLK_IN && is_input)
+                return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_I);
+            if (pin.pin == id_CLK_OUT && !is_input)
+                return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_O);
         } else if ((site.prefix == id_BUFCE_ROW || site.prefix == id_BUFCE_ROW_FSR) && pin.pin == id_CLK_OUT && !is_input) {
             return add_net_pin(net, site, id_BUFCE, id_BUFCE_ROW, id_O);
-        } else if (site.prefix == id_BUFCE_LEAF && pin.pin == id_CLK_IN && is_input) {
-            return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_I);
+        } else if (site.prefix == id_BUFCE_LEAF) {
+            if (pin.pin == id_CLK_IN && !is_input)
+                return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_I);
+            else if (pin.pin == id_CE_INT && !is_input)
+                return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_CE);
+            return false; // return log churn
         } else if (site.prefix == id_SLICE) {
             if ((pin.pin == id_CLK1 || pin.pin == id_CLK2) && is_input) {
                 return add_net_pin(net, site, (pin.pin == id_CLK2) ? id_EFF : id_AFF, id_FDRE, id_C);
+            } else if ((pin.pin == id_SRST1 || pin.pin == id_SRST2) && is_input) {
+                return add_net_pin(net, site, (pin.pin == id_SRST2) ? id_EFF : id_AFF, id_FDRE, id_R);
+            } else if ((pin.pin == id_CKEN1 || pin.pin == id_CKEN2) && is_input) {
+                return add_net_pin(net, site, (pin.pin == id_CKEN2) ? id_EFF : id_AFF, id_FDRE, id_CE);
             } else if (!is_input) {
                 const std::string &pin_str = pin.pin.str(&ctx);
                 if (pin_str.size() == 3 && pin_str.substr(1) == "_O")
@@ -259,7 +286,24 @@ struct FuzzGenWorker {
                     pin.pin.in(id_CLKFBOUT, id_CLKFBOUTB, id_CLKOUT0, id_CLKOUT0B, id_CLKOUT1, id_CLKOUT1B, id_CLKOUT2, id_CLKOUT2B,
                         id_CLKOUT3, id_CLKOUT3B, id_CLKOUT4, id_CLKOUT5, id_CLKOUT6))
                 return add_net_pin(net, site, id_MMCM, id_MMCME4_ADV, pin.pin);
+                } else if (site.prefix == id_MMCM) {
+        } else if (site.prefix == id_PLL) {
+            if (is_input ? pin.pin.in(id_CLKIN, id_CLKFBIN) :
+                    pin.pin.in(id_CLKFBOUT, id_CLKOUT0, id_CLKOUT0B, id_CLKOUT1, id_CLKOUT1B, id_CLKOUTPHY))
+                return add_net_pin(net, site, id_PLL, id_PLLE4_ADV, pin.pin);
+        } else if (site.prefix == id_BITSLICE_RX_TX) {
+            if (is_input && pin.pin.in(id_RX_CLK, id_TX_CLK))
+                return add_net_pin(net, site, id_RXTX_BITSLICE, id_RXTX_BITSLICE, pin.pin);
+            return false; // return log churn
+        } else if (site.prefix == id_IOB && pin.pin == id_I && !is_input) {
+            return add_net_pin(net, site, IdString(), id_IBUF, id_O);
         }
+#if 1
+        if (!site.prefix.in(id_GCLK_TEST_BUFE3, id_BUFCE_LEAF, id_BUFCE_ROW, id_BUFCE_ROW_FSR) && verbose_flag) {
+            auto site_str = site.str(&ctx);
+            log_verbose("skipping %s pin %s/%s\n", (is_input ? "input" : "output"),  site_str.c_str(), pin.pin.c_str(&ctx));
+        }
+#endif
         return false;
     }
 
