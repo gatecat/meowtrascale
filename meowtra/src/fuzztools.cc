@@ -226,14 +226,56 @@ struct FuzzGenWorker {
             log_info("%30s %6d %6d\n", tt.name.c_str(&ctx), tt.success_pips, tt.pip_count);
     }
 
+    bool add_net_pin(int net, TileKey site, IdString bel, IdString cell_type, IdString cell_pin) {
+        // TODO
+        return true;
+    }
+
+    bool process_sitepin(int net, SitePin pin, bool is_input) {
+        TileKey site = pin.site;
+        if (site.prefix == id_BUFGCE || site.prefix == id_BUFGCE_DIV) {
+            if (pin.pin == id_CE_PRE_OPTINV && is_input)
+                return add_net_pin(net, site, site.prefix, site.prefix, id_CE);
+            if (pin.pin == id_CLK_IN && is_input)
+                return add_net_pin(net, site, site.prefix, site.prefix, id_I);
+            if (pin.pin == id_CLK_OUT && !is_input)
+                return add_net_pin(net, site, site.prefix, site.prefix, id_O);
+        } else if ((site.prefix == id_BUFCE_ROW || site.prefix == id_BUFCE_ROW_FSR) && pin.pin == id_CLK_OUT && !is_input) {
+            return add_net_pin(net, site, id_BUFCE, id_BUFCE_ROW, id_O);
+        } else if (site.prefix == id_BUFCE_LEAF && pin.pin == id_CLK_IN && is_input) {
+            return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_I);
+        } else if (site.prefix == id_SLICE) {
+            if ((pin.pin == id_CLK1 || pin.pin == id_CLK2) && is_input) {
+                return add_net_pin(net, site, (pin.pin == id_CLK2) ? id_EFF : id_AFF, id_FDRE, id_C);
+            } else if (!is_input) {
+                const std::string &pin_str = pin.pin.str(&ctx);
+                if (pin_str.size() == 3 && pin_str.substr(1) == "_O")
+                    return add_net_pin(net, site, ctx.id(stringf("%c6LUT", pin_str.at(0))), id_LUT1, id_O);
+                if (pin_str.size() >= 2 && pin_str.at(1) == 'Q')
+                    return add_net_pin(net, site, ctx.id(stringf("%cFF%s", pin_str.at(0), pin_str.c_str() + 2)), id_FDRE, id_Q);
+            }
+        } else if (site.prefix == id_MMCM) {
+            if (is_input ? pin.pin.in(id_CLKIN1, id_CLKIN2, id_CLKFBIN) :
+                    pin.pin.in(id_CLKFBOUT, id_CLKFBOUTB, id_CLKOUT0, id_CLKOUT0B, id_CLKOUT1, id_CLKOUT1B, id_CLKOUT2, id_CLKOUT2B,
+                        id_CLKOUT3, id_CLKOUT3B, id_CLKOUT4, id_CLKOUT5, id_CLKOUT6))
+                return add_net_pin(net, site, id_MMCM, id_MMCME4_ADV, pin.pin);
+        }
+        return false;
+    }
+
     int operator()() {
         if (args.named.count("seed"))
             rng.rngseed(parse_u32(args.named.at("seed").at(0)));
         else
             rng.rngseed(1);
         setup_tiletypes();
-        for (int i = 0; i < 50000; i++)
+        for (int i = 0; i < 500000; i++) {
+            if ((i % 20000) == 0) {
+                node2net.clear();
+                used_pips.clear();
+            }
             do_route(i);
+        }
         print_coverage();
         return 0;
     }
