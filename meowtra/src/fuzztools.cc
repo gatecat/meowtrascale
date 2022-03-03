@@ -77,7 +77,8 @@ struct FuzzGenWorker {
 #endif
     }
 
-    dict<index_t, index_t> node2net; 
+    dict<index_t, index_t> node2net;
+    dict<index_t, std::vector<index_t>> net2route;
     pool<index_t> used_pips;
 
     index_t get_next_pip(TileTypeData &tt) {
@@ -209,24 +210,35 @@ struct FuzzGenWorker {
         used_pips.insert(pip);
         node2net[pip_data.src_node] = net_idx;
         node2net[pip_data.dst_node] = net_idx;
+        std::vector<index_t> fwd_nodes, bwd_nodes;
         fwd_cursor = fwd_endpoint;
         log_verbose("    fwd path:\n");
         while (fwd_cursor != pip_data.dst_node) {
+            fwd_nodes.push_back(fwd_cursor);
             if (verbose_flag)
                 log_verbose("        %s\n", node_name(fwd_cursor));
             node2net[fwd_cursor] = net_idx;
             auto &fwd_pip = graph.pips.at(visited_fwd.at(fwd_cursor));
             fwd_cursor = fwd_pip.src_node;
         }
+        fwd_nodes.push_back(pip_data.dst_node);
         log_verbose("    bwd path:\n");
         index_t bwd_cursor = bwd_startpoint;
         while (bwd_cursor != pip_data.src_node) {
+            bwd_nodes.push_back(bwd_cursor);
             if (verbose_flag)
                 log_verbose("        %s\n", node_name(bwd_cursor));
             node2net[bwd_cursor] = net_idx;
             auto &bwd_pip = graph.pips.at(visited_bwd.at(bwd_cursor));
             bwd_cursor = bwd_pip.dst_node;
         }
+        bwd_nodes.push_back(pip_data.src_node);
+        std::reverse(fwd_nodes.begin(), fwd_nodes.end());
+        net2route[net_idx].clear();
+        for (auto node : bwd_nodes)
+            net2route[net_idx].push_back(node);
+        for (auto node : fwd_nodes)
+            net2route[net_idx].push_back(node);
         ++tt.success_pips;
         return true;
     }
@@ -236,24 +248,41 @@ struct FuzzGenWorker {
             log_info("%30s %6d %6d\n", tt.name.c_str(&ctx), tt.success_pips, tt.pip_count);
     }
 
+    struct CellInst {
+        int cell_idx = -1;
+        IdString cell_type;
+        dict<IdString, int> pin2net;
+    };
+    dict<std::pair<TileKey, IdString>, CellInst> cells;
+
     bool add_net_pin(int net, TileKey site, IdString bel, IdString cell_type, IdString cell_pin) {
-        // TODO
-#if 1
+#if 0
         auto site_str = site.str(&ctx);
         log_verbose("adding pin %s/%s/%s on net %d\n", site_str.c_str(), bel.c_str(&ctx), cell_pin.c_str(&ctx), net);
 #endif
+        auto &cell_inst = cells[std::make_pair(site, bel)];
+        if (cell_inst.cell_type == IdString()) {
+            cell_inst.cell_type = cell_type;
+            cell_inst.cell_idx = int(cells.size());
+        } else {
+            MEOW_ASSERT(cell_inst.cell_type == cell_type);
+        }
+        if (cell_inst.pin2net.count(cell_pin))
+            return false;
+        cell_inst.pin2net[cell_pin] = net;
         return true;
     }
 
     bool process_sitepin(int net, SitePin pin, bool is_input) {
         TileKey site = pin.site;
         if (site.prefix.in(id_BUFGCE, id_BUFGCE_DIV, id_BUFG_PS, id_BUFG_GT)) {
+            IdString bel = (site.prefix == id_BUFGCE) ? id_BUFCE : site.prefix;
             if (pin.pin == id_CE_PRE_OPTINV && is_input)
-                return add_net_pin(net, site, site.prefix, site.prefix, id_CE);
+                return add_net_pin(net, site, bel, site.prefix, id_CE);
             if (pin.pin == id_CLK_IN && is_input)
-                return add_net_pin(net, site, site.prefix, site.prefix, id_I);
+                return add_net_pin(net, site, bel, site.prefix, id_I);
             if (pin.pin == id_CLK_OUT && !is_input)
-                return add_net_pin(net, site, site.prefix, site.prefix, id_O);
+                return add_net_pin(net, site, bel, site.prefix, id_O);
         } else if (site.prefix == id_BUFGCE_HDIO) {
             if (pin.pin == id_CLK_IN && is_input)
                 return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_I);
@@ -262,9 +291,9 @@ struct FuzzGenWorker {
         } else if ((site.prefix == id_BUFCE_ROW || site.prefix == id_BUFCE_ROW_FSR) && pin.pin == id_CLK_OUT && !is_input) {
             return add_net_pin(net, site, id_BUFCE, id_BUFCE_ROW, id_O);
         } else if (site.prefix == id_BUFCE_LEAF) {
-            if (pin.pin == id_CLK_IN && !is_input)
+            if (pin.pin == id_CLK_IN && is_input)
                 return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_I);
-            else if (pin.pin == id_CE_INT && !is_input)
+            else if (pin.pin == id_CE_INT && is_input)
                 return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_CE);
             return false; // return log churn
         } else if (site.prefix == id_SLICE) {
@@ -307,18 +336,74 @@ struct FuzzGenWorker {
         return false;
     }
 
+    void write_tcl(int design) {
+        std::string filename = args.named.at("out").at(0);
+        filename += "/gen_design_";
+        filename += std::to_string(design);
+        filename += ".tcl";
+        std::ofstream out(filename);
+        if (!out)
+            log_error("failed to open output file %s\n", filename.c_str());
+        out << "remove_net *" << std::endl;
+        out << "set_property dont_touch 0 [get_cells]" << std::endl; // for remove_cell to work (useful for interactive tests)
+        out << "remove_cell *" << std::endl;
+        out << std::endl;
+        dict<int, std::vector<std::pair<int, IdString>>> net2pin;
+        for (auto &cell : cells) {
+            out << "set c [create_cell -reference " << cell.second.cell_type.c_str(&ctx) << " c" << cell.second.cell_idx << "]" << std::endl;
+            if (cell.first.second == IdString())
+                out << "place_cell $c " << cell.first.first.str(&ctx) << std::endl;
+            else
+                out << "place_cell $c " << cell.first.first.str(&ctx) << "/" << cell.first.second.c_str(&ctx) << std::endl;
+            out << "set_property keep 1 $c" << std::endl;
+            out << "set_property dont_touch 1 $c" << std::endl;
+            out << "set_property IS_LOC_FIXED 1 $c" << std::endl;
+            if (cell.first.second != IdString())
+                out << "set_property IS_BEL_FIXED 1 $c" << std::endl;
+            out << std::endl;
+            for (auto pin : cell.second.pin2net) {
+                net2pin[pin.second].emplace_back(cell.second.cell_idx, pin.first);
+            }
+        }
+        for (auto &net : net2route) {
+            int idx = net.first;
+            out << "set n [create_net n" << idx << "]" << std::endl;
+            std::string pins = "";
+            for (auto pin : net2pin.at(idx)) {
+                if (!pins.empty())
+                    pins += " ";
+                pins += stringf("c%d/%s", pin.first, pin.second.c_str(&ctx));
+            }
+            out << "connect_net -net $n -objects {" << pins << "}" << std::endl;
+            std::string route = "";
+            for (index_t node : net.second) {
+                if (!route.empty())
+                    route += " ";
+                route += node_name(node);
+            }
+            out << "set_property ROUTE {" << route << "} $n" << std::endl;
+            out << "set_property IS_ROUTE_FIXED 1 $n" << std::endl;
+            out << std::endl;
+        }
+    }
+
     int operator()() {
         if (args.named.count("seed"))
             rng.rngseed(parse_u32(args.named.at("seed").at(0)));
         else
             rng.rngseed(1);
         setup_tiletypes();
-        for (int i = 0; i < 500000; i++) {
-            if ((i % 20000) == 0) {
-                node2net.clear();
-                used_pips.clear();
+        int net = 0;
+        for (int design = 0; design < (args.named.count("num-designs") ? std::stoi(args.named.at("num-designs").at(0)) : 20); design++) {
+            node2net.clear();
+            used_pips.clear();
+            cells.clear();
+            net2route.clear();
+            for (int i = 0; i < 50000; i++) {
+                net++;
+                do_route(net);
             }
-            do_route(i);
+            write_tcl(design);
         }
         print_coverage();
         return 0;
@@ -329,6 +414,8 @@ int subcmd_fuzztools(int argc, const char *argv[]) {
     CmdlineParser parser;
     parser.add_opt("v", 0, "verbose output");
     parser.add_opt("nodegraph", 1, "path to nodegraph file");
+    parser.add_opt("num-designs", 1, "number of designs to generate");
+    parser.add_opt("out", 1, "output directory");
 
     CmdlineResult result;
     if (!parser.parse(argc, argv, 2, std::cerr, result))
