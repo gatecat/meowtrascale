@@ -97,7 +97,7 @@ struct CorrelateWorker {
 
     void do_correlate(IdString tt) {
         SpecimenGroup group;
-        for (index_t i = 0; i < tile_bits.size(); i++) {
+        for (index_t i = 0; i < index_t(tile_bits.size()); i++) {
             auto &bits = tile_bits.at(i);
             auto &feats = tile_feats.at(i);
             for (auto &feat_tile : feats.tiles) {
@@ -113,6 +113,7 @@ struct CorrelateWorker {
         if (group.specs.empty())
             return;
         log_info("processing tile type %s...\n", tt.c_str(&ctx));
+        std::cout << "*** " << tt.c_str(&ctx) << " ***" << std::endl;
         group.find_deps();
         group.solve(&ctx);
     }

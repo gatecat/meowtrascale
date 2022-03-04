@@ -345,12 +345,13 @@ struct FuzzGenWorker {
         if (!out)
             log_error("failed to open output file %s\n", filename.c_str());
         out << "remove_net *" << std::endl;
-        out << "set_property dont_touch 0 [get_cells]" << std::endl; // for remove_cell to work (useful for interactive tests)
+        out << "if {[llength [get_cells]] > 0} { set_property dont_touch 0 [get_cells] }" << std::endl; // for remove_cell to work (useful for interactive tests)
         out << "remove_cell *" << std::endl;
         out << std::endl;
         dict<int, std::vector<std::pair<int, IdString>>> net2pin;
         for (auto &cell : cells) {
-            out << "set c [create_cell -reference " << cell.second.cell_type.c_str(&ctx) << " c" << cell.second.cell_idx << "]" << std::endl;
+            int idx = cell.second.cell_idx;
+            out << "set c [create_cell -reference " << cell.second.cell_type.c_str(&ctx) << " c" << idx << "]" << std::endl;
             if (cell.first.second == IdString())
                 out << "place_cell $c " << cell.first.first.str(&ctx) << std::endl;
             else
@@ -363,6 +364,11 @@ struct FuzzGenWorker {
             out << std::endl;
             for (auto pin : cell.second.pin2net) {
                 net2pin[pin.second].emplace_back(cell.second.cell_idx, pin.first);
+            }
+            if (cell.second.cell_type == id_IBUF) {
+                out << "set p [create_port -direction IN c" << idx << "_io]" << std::endl;
+                out << "set n [create_net c" << idx << "_io]" << std::endl;
+                out << "connect_net -net $n -objects {c" << idx << "_io c" << idx << "/I}" << std::endl;
             }
         }
         for (auto &net : net2route) {

@@ -38,12 +38,14 @@ void SpecimenGroup::solve(Context *ctx) {
     dict<Feature, pool<index_t>> result;
     pool<index_t> set_with_feature;
     std::vector<index_t> to_remove;
+    dict<Feature, index_t> feature_count;
     for (auto feat : to_solve) {
         bool found = false;
         set_with_feature.clear();
         for (auto &spec : specs) {
             if (!spec.features.count(feat))
                 continue;
+            ++feature_count[feat];
             if (!found) {
                 // first time we hit feature, add all not set in dependent features
                 for (auto set : spec.set_bits)
@@ -77,14 +79,16 @@ void SpecimenGroup::solve(Context *ctx) {
 
     for (auto feat : to_print) {
         // TODO: save properly
+        if (feature_count.at(feat) <= 1)
+            continue; // too unrealiable to print...
         feat.write(ctx, std::cout);
         for (auto bit : result.at(feat))
             std::cout << " " << (bit / tile_bits) << "_" << (bit % tile_bits);
-        std::cout << " # deps: ";
-        for (auto dep : dependencies.at(feat)) {
+        std::cout << " # deps: " << dependencies.at(feat).size();
+        /*for (auto dep : dependencies.at(feat)) {
             dep.write(ctx, std::cout);
             std::cout << ", ";
-        }
+        }*/
         std::cout << std::endl;
     }
 }

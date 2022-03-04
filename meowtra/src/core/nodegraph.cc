@@ -14,8 +14,8 @@ NodeGraph NodeGraph::parse(Context *ctx, const std::string &file) {
         auto spl = split_view(name, '/');
         auto key = std::make_pair(TileKey::parse(ctx, spl.first), ctx->id(std::string(spl.second)));
         index_t idx = nodes_by_name(key);
-        MEOW_ASSERT(idx <= int(result.nodes.size()));
-        if (idx == result.nodes.size()) {
+        MEOW_ASSERT(idx <= index_t(result.nodes.size()));
+        if (idx == index_t(result.nodes.size())) {
             result.nodes.emplace_back(key.first, key.second);
         }
         return idx;
