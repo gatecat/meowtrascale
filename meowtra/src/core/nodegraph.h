@@ -9,8 +9,10 @@ MEOW_NAMESPACE_BEGIN
 
 struct Pip {
     TileKey tile;
+    IdString pip_name;
     index_t src_node;
     index_t dst_node;
+    bool bidi = false;
     bool is_rclk = false;
 };
 

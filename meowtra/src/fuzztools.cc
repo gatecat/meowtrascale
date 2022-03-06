@@ -22,17 +22,32 @@ struct FuzzGenWorker {
     NodeGraph graph;
     DeterministicRNG rng;
 
+    struct TileTypePip {
+        TileTypePip() = default;
+        TileTypePip(IdString tile_type, IdString pip_name) : tile_type(tile_type), pip_name(pip_name) {};
+        IdString tile_type;
+        IdString pip_name;
+        bool operator==(const TileTypePip &other) const {
+            return tile_type == other.tile_type && pip_name == other.pip_name;
+        }
+        unsigned hash() const {
+            return mkhash(tile_type.hash(), pip_name.hash());
+        }
+    };
+
     struct TileTypeData {
         IdString name;
-        index_t tried_pips = 0;
-        index_t success_pips = 0;
         index_t pip_count = 0;
         idict<TileKey> tile_insts;
-        std::vector<std::vector<index_t>> tile_pips;
+        std::vector<dict<IdString, index_t>> tile_pips;
     };
 
     std::vector<TileTypeData> tile_types;
     idict<IdString> tile_type_keys;
+
+    pool<TileTypePip> avail_ttpips;
+    dict<TileTypePip, int> covered_ttpips;
+    std::vector<TileTypePip> try_pips;
 
     void setup_tiletypes() {
         for (index_t i = 0; i < index_t(graph.pips.size()); i++) {
@@ -48,57 +63,21 @@ struct FuzzGenWorker {
             index_t inst_idx = type_data.tile_insts(pip.tile);
             if (inst_idx == index_t(type_data.tile_pips.size()))
                 type_data.tile_pips.emplace_back();
-            type_data.tile_pips.at(inst_idx).push_back(i);
+            type_data.tile_pips.at(inst_idx)[pip.pip_name] = i;
+            avail_ttpips.emplace(tile_type, pip.pip_name);
         }
         for (auto &tt : tile_types) {
             for (auto &inst : tt.tile_pips)
                 tt.pip_count = std::max(tt.pip_count, index_t(inst.size()));
         }
-    }
-
-    index_t get_next_tiletype() {
-#if 0
-        index_t next = -1;
-        double lowest_coverage = std::numeric_limits<double>::max();
-        for (index_t i = 0; i < index_t(tile_types.size()); i++) {
-            auto &tt = tile_types.at(i);
-            if (tt.pip_count == 0)
-                continue;
-            double coverage = double(tt.tried_pips) / double(tt.pip_count);
-            if (coverage < lowest_coverage || ((coverage == lowest_coverage) && rng.rng(2))) {
-                next = i;
-                lowest_coverage = coverage;
-            }
-        }
-        MEOW_ASSERT(next != -1);
-        return next;
-#else
-        return rng.rng(tile_types.size());
-#endif
+        for (auto ttp : avail_ttpips)
+            covered_ttpips[ttp] = 0;
     }
 
     dict<index_t, index_t> node2net;
     dict<index_t, std::vector<index_t>> net2route;
     pool<index_t> used_pips;
 
-    index_t get_next_pip(TileTypeData &tt) {
-        // up to 5 tries
-        for (index_t i = 0; i < 5; i++) {
-            auto &inst = rng.choice(tt.tile_pips);
-            if (inst.empty())
-                continue;
-            index_t pip = rng.choice(inst);
-            if (used_pips.count(pip))
-                continue;
-            auto &pip_data = graph.pips.at(pip);
-            if (node2net.count(pip_data.src_node))
-                continue;
-            if (node2net.count(pip_data.dst_node))
-                continue;
-            return pip;
-        }
-        return -1;
-    }
 
     std::vector<std::string> string_pool;
     index_t string_pool_idx = 0;
@@ -117,21 +96,26 @@ struct FuzzGenWorker {
 
     const int iter_limit = 500000;
 
-    bool do_route(int net_idx) {
-        index_t tti = get_next_tiletype();
-        auto &tt = tile_types.at(tti);
-        ++tt.tried_pips;
-        index_t pip = get_next_pip(tt);
-        if (pip == -1)
+    bool do_route(int net_idx, TileTypePip ttpip) {
+        auto &tt = tile_types.at(tile_type_keys(ttpip.tile_type));
+        auto &ti = tt.tile_pips.at(rng.rng(tt.tile_pips.size()));
+        if (!ti.count(ttpip.pip_name))
             return false;
+        index_t pip = ti.at(ttpip.pip_name);
         auto &pip_data = graph.pips.at(pip);
+        if (node2net.count(pip_data.src_node) || node2net.count(pip_data.dst_node))
+            return false;
+        index_t src_node = pip_data.src_node;
+        index_t dst_node = pip_data.dst_node;
+        if (pip_data.bidi && rng.rng(2))
+            std::swap(src_node, dst_node);
         dict<index_t, index_t> visited_fwd, visited_bwd;
         if (verbose_flag)
-            log_verbose("trying %s --> %s\n", node_name(pip_data.src_node), node_name(pip_data.dst_node));
+            log_verbose("trying %s --> %s\n", node_name(src_node), node_name(dst_node));
         std::queue<index_t> queue_fwd, queue_bwd;
-        visited_fwd[pip_data.dst_node] = pip;
-        visited_fwd[pip_data.src_node] = -1; // disallow in fwd cone
-        queue_fwd.push(pip_data.dst_node);
+        visited_fwd[dst_node] = pip;
+        visited_fwd[src_node] = -1; // disallow in fwd cone
+        queue_fwd.push(dst_node);
 
         int fwd_iter = 0;
         index_t fwd_endpoint = -1;
@@ -163,16 +147,16 @@ struct FuzzGenWorker {
         if (fwd_endpoint == -1)
             return false; // no endpoint reached
 
-        visited_bwd[pip_data.src_node] = pip;
+        visited_bwd[src_node] = pip;
         // disallow fwd cone in bwd cone
         index_t fwd_cursor = fwd_endpoint;
-        while (fwd_cursor != pip_data.dst_node) {
+        while (fwd_cursor != dst_node) {
             visited_bwd[fwd_cursor] = -1;
             auto &fwd_pip = graph.pips.at(visited_fwd.at(fwd_cursor));
             fwd_cursor = fwd_pip.src_node;
         }
-        visited_bwd[pip_data.dst_node] = -1; // disallow in bwd cone
-        queue_bwd.push(pip_data.src_node);
+        visited_bwd[dst_node] = -1; // disallow in bwd cone
+        queue_bwd.push(src_node);
 
         int bwd_iter = 0;
         index_t bwd_startpoint = -1;
@@ -208,12 +192,12 @@ struct FuzzGenWorker {
 
         // do bind
         used_pips.insert(pip);
-        node2net[pip_data.src_node] = net_idx;
-        node2net[pip_data.dst_node] = net_idx;
+        node2net[src_node] = net_idx;
+        node2net[dst_node] = net_idx;
         std::vector<index_t> fwd_nodes, bwd_nodes;
         fwd_cursor = fwd_endpoint;
         log_verbose("    fwd path:\n");
-        while (fwd_cursor != pip_data.dst_node) {
+        while (fwd_cursor != dst_node) {
             fwd_nodes.push_back(fwd_cursor);
             if (verbose_flag)
                 log_verbose("        %s\n", node_name(fwd_cursor));
@@ -221,10 +205,10 @@ struct FuzzGenWorker {
             auto &fwd_pip = graph.pips.at(visited_fwd.at(fwd_cursor));
             fwd_cursor = fwd_pip.src_node;
         }
-        fwd_nodes.push_back(pip_data.dst_node);
+        fwd_nodes.push_back(dst_node);
         log_verbose("    bwd path:\n");
         index_t bwd_cursor = bwd_startpoint;
-        while (bwd_cursor != pip_data.src_node) {
+        while (bwd_cursor != src_node) {
             bwd_nodes.push_back(bwd_cursor);
             if (verbose_flag)
                 log_verbose("        %s\n", node_name(bwd_cursor));
@@ -232,20 +216,15 @@ struct FuzzGenWorker {
             auto &bwd_pip = graph.pips.at(visited_bwd.at(bwd_cursor));
             bwd_cursor = bwd_pip.dst_node;
         }
-        bwd_nodes.push_back(pip_data.src_node);
+        bwd_nodes.push_back(src_node);
         std::reverse(fwd_nodes.begin(), fwd_nodes.end());
         net2route[net_idx].clear();
         for (auto node : bwd_nodes)
             net2route[net_idx].push_back(node);
         for (auto node : fwd_nodes)
             net2route[net_idx].push_back(node);
-        ++tt.success_pips;
+        covered_ttpips[ttpip] += 1;
         return true;
-    }
-
-    void print_coverage() {
-        for (auto &tt : tile_types)
-            log_info("%30s %6d %6d\n", tt.name.c_str(&ctx), tt.success_pips, tt.pip_count);
     }
 
     struct CellInst {
@@ -393,21 +372,50 @@ struct FuzzGenWorker {
         }
     }
 
+    void setup_design() {
+        node2net.clear();
+        used_pips.clear();
+        cells.clear();
+        net2route.clear();
+        try_pips.clear();
+        // sort pips randomly first, then by lowest coverage
+        for (auto ttp : avail_ttpips)
+            try_pips.push_back(ttp);
+        rng.shuffle(try_pips);
+        std::stable_sort(try_pips.begin(), try_pips.end(), [&] (TileTypePip a, TileTypePip b) {
+            return covered_ttpips.at(a) < covered_ttpips.at(b);
+        });
+        // disable a random percentage of nodes
+        for (index_t i = 0; i < index_t(graph.nodes.size()); i++) {
+            if (rng.rng(10) < 2)
+                node2net[i] = -1;
+        }
+    }
+
+    void print_coverage() {
+        dict<IdString, int> tt_coverage;
+        for (auto cov : covered_ttpips) {
+            if (cov.second > 0)
+                tt_coverage[cov.first.tile_type] += 1;
+        }
+        for (auto &tt : tile_types) {
+            log_info("%30s %6d %6d\n", tt.name.c_str(&ctx), tt_coverage.count(tt.name) ? tt_coverage.at(tt.name) : 0, tt.pip_count);
+        }
+    }
+
     int operator()() {
         if (args.named.count("seed"))
             rng.rngseed(parse_u32(args.named.at("seed").at(0)));
         else
             rng.rngseed(1);
         setup_tiletypes();
+        log_info("Total of %d tiletype-pips to test\n", int(avail_ttpips.size()));
         int net = 0;
         for (int design = 0; design < (args.named.count("num-designs") ? std::stoi(args.named.at("num-designs").at(0)) : 20); design++) {
-            node2net.clear();
-            used_pips.clear();
-            cells.clear();
-            net2route.clear();
+            setup_design();
             for (int i = 0; i < 50000; i++) {
                 net++;
-                do_route(net);
+                do_route(net, try_pips.at(i % int(try_pips.size())));
             }
             write_tcl(design);
         }

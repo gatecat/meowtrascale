@@ -48,7 +48,7 @@ foreach t [get_tiles] {
 		continue
 	}
 	foreach pip [get_pips -of_objects $t] {
-		puts $f "pip $t [get_nodes -uphill -of_objects $pip] [get_nodes -downhill -of_objects $pip]"
+		puts $f "pip [get_property NAME $pip] [get_property IS_DIRECTIONAL $pip] [get_nodes -uphill -of_objects $pip] [get_nodes -downhill -of_objects $pip]"
 		do_visit [get_nodes -uphill -of_objects $pip] 0
 		do_visit [get_nodes -downhill -of_objects $pip] 0
 	}

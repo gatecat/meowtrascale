@@ -31,7 +31,15 @@ NodeGraph NodeGraph::parse(Context *ctx, const std::string &file) {
             index_t pip_idx = index_t(result.pips.size());
             result.pips.emplace_back();
             auto &pip_data = result.pips.back();
-            pip_data.tile = TileKey::parse(ctx, *iter++);
+            if (mode == "extpip") {
+                pip_data.tile = TileKey::parse(ctx, *iter++);
+                pip_data.bidi = false;
+            } else {
+                auto spl = split_view(*iter++, '/');
+                pip_data.tile = TileKey::parse(ctx, spl.first);
+                pip_data.pip_name = ctx->id(std::string(spl.second));
+                pip_data.bidi = (mode == "pip") ? (parse_u32(*iter++) == 0) : false;
+            }
             if (iter == line.end()) {
                 result.pips.pop_back();
                 continue; // missing node
