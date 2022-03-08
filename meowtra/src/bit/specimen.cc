@@ -85,6 +85,7 @@ void SpecimenGroup::solve(Context *ctx) {
         for (auto bit : result.at(feat))
             std::cout << " " << (bit / tile_bits) << "_" << (bit % tile_bits);
         std::cout << " # deps: " << dependencies.at(feat).size();
+        std::cout << ", count: " << feature_count.at(feat);
         /*for (auto dep : dependencies.at(feat)) {
             dep.write(ctx, std::cout);
             std::cout << ", ";

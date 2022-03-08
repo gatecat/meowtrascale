@@ -246,8 +246,13 @@ struct FuzzGenWorker {
         } else {
             MEOW_ASSERT(cell_inst.cell_type == cell_type);
         }
-        if (cell_inst.pin2net.count(cell_pin))
-            return false;
+        if (cell_inst.pin2net.count(cell_pin)) {
+            int pin_net = cell_inst.pin2net.at(cell_pin);
+            // only need to skip if the net the pin is supposedly bound to exists
+            // TODO: probably shouldn't bind nets to pins until routing actually succeeds...
+            if (net2route.count(pin_net) || pin_net == net)
+                return false;
+        }
         cell_inst.pin2net[cell_pin] = net;
         return true;
     }
@@ -267,6 +272,13 @@ struct FuzzGenWorker {
                 return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_I);
             if (pin.pin == id_CLK_OUT && !is_input)
                 return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_O);
+        } else if (site.prefix == id_BUFGCTRL) {
+            if (pin.pin == id_CLK_I0 && is_input)
+                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_I0);
+            if (pin.pin == id_CLK_I1 && is_input)
+                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_I1);
+            if (pin.pin == id_CLK_OUT && !is_input)
+                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_O);
         } else if ((site.prefix == id_BUFCE_ROW || site.prefix == id_BUFCE_ROW_FSR) && pin.pin == id_CLK_OUT && !is_input) {
             return add_net_pin(net, site, id_BUFCE, id_BUFCE_ROW, id_O);
         } else if (site.prefix == id_BUFCE_LEAF) {
@@ -401,6 +413,12 @@ struct FuzzGenWorker {
         for (auto &tt : tile_types) {
             log_info("%30s %6d %6d\n", tt.name.c_str(&ctx), tt_coverage.count(tt.name) ? tt_coverage.at(tt.name) : 0, tt.pip_count);
         }
+        if (args.named.count("cov")) {
+            std::ofstream out(args.named.at("cov").at(0));
+            for (auto cov : covered_ttpips) {
+                out << cov.first.tile_type.c_str(&ctx) << " " << cov.first.pip_name.c_str(&ctx) << " " << cov.second << std::endl;
+            }
+        }
     }
 
     int operator()() {
@@ -420,6 +438,7 @@ struct FuzzGenWorker {
             write_tcl(design);
         }
         print_coverage();
+
         return 0;
     }
 };
@@ -430,6 +449,7 @@ int subcmd_fuzztools(int argc, const char *argv[]) {
     parser.add_opt("nodegraph", 1, "path to nodegraph file");
     parser.add_opt("num-designs", 1, "number of designs to generate");
     parser.add_opt("out", 1, "output directory");
+    parser.add_opt("cov", 1, "write detailed coverage data");
 
     CmdlineResult result;
     if (!parser.parse(argc, argv, 2, std::cerr, result))

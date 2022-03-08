@@ -19,22 +19,38 @@ proc do_visit {node depth} {
 	}
 	set visited($node) $depth
 	set pip_count 0
-	foreach pip [get_pips -of_objects $node] {
+	foreach pip [get_pips -uphill -of_objects $node] {
 		# only interested in leaving the RCLK...
 		set pip_t [get_tiles -of_objects $pip]
 		set pip_tt [get_property TILE_TYPE $pip_t]
 
-		if {[string first "RCLK" $pip_tt] == 0 || [string first "CMT" $pip_tt] == 0} {
+		if {[string first "RCLK" $pip_tt] == 0 || [string first "CMT" $pip_tt] == 0 || [string first "CLE" $pip_tt] == 0} {
 			continue
 		}
 
 		incr pip_count
-		if {$pip_tt == "INT" && $pip_count > 2} {
+		if {$pip_tt == "INT" && ($pip_count > 1) } {
 			break
 		}
 
 		puts $f "extpip $pip_t [get_nodes -uphill -of_objects $pip] [get_nodes -downhill -of_objects $pip]"
 		do_visit [get_nodes -uphill -of_objects $pip] [expr $depth+1]
+	}
+	foreach pip [get_pips -downhill -of_objects $node] {
+		# only interested in leaving the RCLK...
+		set pip_t [get_tiles -of_objects $pip]
+		set pip_tt [get_property TILE_TYPE $pip_t]
+
+		if {[string first "RCLK" $pip_tt] == 0 || [string first "CMT" $pip_tt] == 0 || [string first "CLE" $pip_tt] == 0} {
+			continue
+		}
+
+		incr pip_count
+		if {$pip_tt == "INT" && ($pip_count > 1) } {
+			break
+		}
+
+		puts $f "extpip $pip_t [get_nodes -uphill -of_objects $pip] [get_nodes -downhill -of_objects $pip]"
 		do_visit [get_nodes -downhill -of_objects $pip] [expr $depth+1]
 	}
 	foreach site_pin [get_site_pins -of_objects $node] {
