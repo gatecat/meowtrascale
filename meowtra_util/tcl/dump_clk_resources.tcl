@@ -36,6 +36,7 @@ proc do_visit {node depth} {
 		puts $f "extpip $pip_t [get_nodes -uphill -of_objects $pip] [get_nodes -downhill -of_objects $pip]"
 		do_visit [get_nodes -uphill -of_objects $pip] [expr $depth+1]
 	}
+	set pip_count 0
 	foreach pip [get_pips -downhill -of_objects $node] {
 		# only interested in leaving the RCLK...
 		set pip_t [get_tiles -of_objects $pip]

@@ -164,6 +164,10 @@ struct FuzzGenWorker {
             index_t cursor = queue_bwd.front();
             queue_bwd.pop();
             auto &cursor_node = graph.nodes.at(cursor);
+            if (process_constant(net_idx, cursor)) { // can tie to a constant
+                bwd_startpoint = cursor;
+                break;
+            }
             if (!cursor_node.pins.empty()) {
                 for (auto &pin : cursor_node.pins) {
                     if (!process_sitepin(net_idx, pin, false))
@@ -257,11 +261,27 @@ struct FuzzGenWorker {
         return true;
     }
 
+    bool process_constant(int net, index_t node) {
+        auto &node_data = graph.nodes.at(node);
+        const std::string &name = node_data.name.str(&ctx);
+        bool is_vcc = name.starts_with("VCC_WIRE"), is_gnd = name.starts_with("GND_WIRE");
+        if (!is_vcc && !is_gnd)
+            return false;
+        auto node_key = std::make_pair(node_data.tile, node_data.name);
+        if (cells.count(node_key))
+            return false;
+        auto &cell_inst = cells[node_key];
+        cell_inst.cell_type = (is_vcc ? id_VCC : id_GND);
+        cell_inst.cell_idx = int(cells.size());
+        cell_inst.pin2net[is_vcc ? id_P : id_G] = net;
+        return true;
+    }
+
     bool process_sitepin(int net, SitePin pin, bool is_input) {
         TileKey site = pin.site;
         if (site.prefix.in(id_BUFGCE, id_BUFGCE_DIV, id_BUFG_PS, id_BUFG_GT)) {
             IdString bel = (site.prefix == id_BUFGCE) ? id_BUFCE : site.prefix;
-            if (pin.pin == id_CE_PRE_OPTINV && is_input)
+            if (pin.pin == id_CE_PRE_OPTINV && is_input && site.prefix != id_BUFG_GT)
                 return add_net_pin(net, site, bel, site.prefix, id_CE);
             if (pin.pin == id_CLK_IN && is_input)
                 return add_net_pin(net, site, bel, site.prefix, id_I);
@@ -340,18 +360,21 @@ struct FuzzGenWorker {
         out << "remove_cell *" << std::endl;
         out << std::endl;
         dict<int, std::vector<std::pair<int, IdString>>> net2pin;
+        int next_cell_idx = int(cells.size());
         for (auto &cell : cells) {
             int idx = cell.second.cell_idx;
             out << "set c [create_cell -reference " << cell.second.cell_type.c_str(&ctx) << " c" << idx << "]" << std::endl;
-            if (cell.first.second == IdString())
-                out << "place_cell $c " << cell.first.first.str(&ctx) << std::endl;
-            else
-                out << "place_cell $c " << cell.first.first.str(&ctx) << "/" << cell.first.second.c_str(&ctx) << std::endl;
+            if (cell.second.cell_type.in(id_VCC, id_GND)) {
+                if (cell.first.second == IdString())
+                    out << "place_cell $c " << cell.first.first.str(&ctx) << std::endl;
+                else
+                    out << "place_cell $c " << cell.first.first.str(&ctx) << "/" << cell.first.second.c_str(&ctx) << std::endl;
+                out << "set_property IS_LOC_FIXED 1 $c" << std::endl;
+                if (cell.first.second != IdString())
+                    out << "set_property IS_BEL_FIXED 1 $c" << std::endl;
+            }
             out << "set_property keep 1 $c" << std::endl;
             out << "set_property dont_touch 1 $c" << std::endl;
-            out << "set_property IS_LOC_FIXED 1 $c" << std::endl;
-            if (cell.first.second != IdString())
-                out << "set_property IS_BEL_FIXED 1 $c" << std::endl;
             out << std::endl;
             for (auto pin : cell.second.pin2net) {
                 net2pin[pin.second].emplace_back(cell.second.cell_idx, pin.first);
@@ -360,6 +383,20 @@ struct FuzzGenWorker {
                 out << "set p [create_port -direction IN c" << idx << "_io]" << std::endl;
                 out << "set n [create_net c" << idx << "_io]" << std::endl;
                 out << "connect_net -net $n -objects {c" << idx << "_io c" << idx << "/I}" << std::endl;
+            } else if (cell.second.cell_type == id_BUFG_GT) {
+                int sync_idx = idx;
+                out << "set c [create_cell -reference BUFG_GT_SYNC c" << sync_idx << "]" << std::endl;
+                auto sync_prefix =  cell.first.first;
+                sync_prefix.prefix = id_BUFG_GT_SYNC;
+                out << "place_cell $c " << sync_prefix.str(&ctx) << "/BUFG_GT_SYNC" << std::endl;
+                out << "set_property keep 1 $c" << std::endl;
+                out << "set_property dont_touch 1 $c" << std::endl;
+                out << "set_property IS_LOC_FIXED 1 $c" << std::endl;
+                out << "set_property IS_BEL_FIXED 1 $c" << std::endl;
+                out << "set n [create_net c" << sync_idx << "_ce]" << std::endl;
+                out << "connect_net -net $n -objects {c" << idx << "/CE c" << sync_idx << "/CESYNC}" << std::endl;
+                out << "set n [create_net c" << sync_idx << "_clr]" << std::endl;
+                out << "connect_net -net $n -objects {c" << idx << "/CLR c" << sync_idx << "/CLRSYNC}" << std::endl;
             }
         }
         for (auto &net : net2route) {
