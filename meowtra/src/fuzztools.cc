@@ -77,6 +77,7 @@ struct FuzzGenWorker {
     dict<index_t, index_t> node2net;
     dict<index_t, std::vector<index_t>> net2route;
     pool<index_t> used_pips;
+    pool<TileKey> used_sites, routethru_sites;
 
 
     std::vector<std::string> string_pool;
@@ -96,6 +97,33 @@ struct FuzzGenWorker {
 
     const int iter_limit = 500000;
 
+    bool is_routethru_blocked(const Pip &pip_data) {
+        // don't route through used sites
+        auto &from_node = graph.nodes.at(pip_data.src_node);
+        auto &to_node = graph.nodes.at(pip_data.dst_node);
+        for (auto fpin : from_node.pins) {
+            if (!used_sites.count(fpin.site))
+                continue;
+            for (auto tpin : to_node.pins) {
+                if (!used_sites.count(tpin.site))
+                    continue;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void block_sites(const Pip &pip_data) {
+        auto &from_node = graph.nodes.at(pip_data.src_node);
+        auto &to_node = graph.nodes.at(pip_data.dst_node);
+        for (auto fpin : from_node.pins) {
+            for (auto tpin : to_node.pins) {
+                if (fpin.site == tpin.site)
+                    routethru_sites.insert(fpin.site);
+            }
+        }
+    }
+
     bool do_route(int net_idx, TileTypePip ttpip) {
         auto &tt = tile_types.at(tile_type_keys(ttpip.tile_type));
         auto &ti = tt.tile_pips.at(rng.rng(tt.tile_pips.size()));
@@ -103,7 +131,7 @@ struct FuzzGenWorker {
             return false;
         index_t pip = ti.at(ttpip.pip_name);
         auto &pip_data = graph.pips.at(pip);
-        if (node2net.count(pip_data.src_node) || node2net.count(pip_data.dst_node))
+        if (node2net.count(pip_data.src_node) || node2net.count(pip_data.dst_node) || is_routethru_blocked(pip_data))
             return false;
         index_t src_node = pip_data.src_node;
         index_t dst_node = pip_data.dst_node;
@@ -137,7 +165,7 @@ struct FuzzGenWorker {
                 if (used_pips.count(pip_dh))
                     continue;
                 auto &cursor_pip = graph.pips.at(pip_dh);
-                if (node2net.count(cursor_pip.dst_node) || visited_fwd.count(cursor_pip.dst_node))
+                if (node2net.count(cursor_pip.dst_node) || visited_fwd.count(cursor_pip.dst_node) || is_routethru_blocked(cursor_pip))
                     continue;
                 visited_fwd[cursor_pip.dst_node] = pip_dh;
                 queue_fwd.push(cursor_pip.dst_node);
@@ -164,10 +192,10 @@ struct FuzzGenWorker {
             index_t cursor = queue_bwd.front();
             queue_bwd.pop();
             auto &cursor_node = graph.nodes.at(cursor);
-            if (process_constant(net_idx, cursor)) { // can tie to a constant
+            /* if (process_constant(net_idx, cursor)) { // can tie to a constant
                 bwd_startpoint = cursor;
                 break;
-            }
+            } */
             if (!cursor_node.pins.empty()) {
                 for (auto &pin : cursor_node.pins) {
                     if (!process_sitepin(net_idx, pin, false))
@@ -182,7 +210,7 @@ struct FuzzGenWorker {
                 if (used_pips.count(pip_uh))
                     continue;
                 auto &cursor_pip = graph.pips.at(pip_uh);
-                if (node2net.count(cursor_pip.src_node) || visited_bwd.count(cursor_pip.src_node))
+                if (node2net.count(cursor_pip.src_node) || visited_bwd.count(cursor_pip.src_node) || is_routethru_blocked(cursor_pip))
                     continue;
                 visited_bwd[cursor_pip.src_node] = pip_uh;
                 queue_bwd.push(cursor_pip.src_node);
@@ -198,6 +226,7 @@ struct FuzzGenWorker {
         used_pips.insert(pip);
         node2net[src_node] = net_idx;
         node2net[dst_node] = net_idx;
+        block_sites(pip_data);
         std::vector<index_t> fwd_nodes, bwd_nodes;
         fwd_cursor = fwd_endpoint;
         log_verbose("    fwd path:\n");
@@ -207,6 +236,7 @@ struct FuzzGenWorker {
                 log_verbose("        %s\n", node_name(fwd_cursor));
             node2net[fwd_cursor] = net_idx;
             auto &fwd_pip = graph.pips.at(visited_fwd.at(fwd_cursor));
+            block_sites(fwd_pip);
             fwd_cursor = fwd_pip.src_node;
         }
         fwd_nodes.push_back(dst_node);
@@ -218,6 +248,7 @@ struct FuzzGenWorker {
                 log_verbose("        %s\n", node_name(bwd_cursor));
             node2net[bwd_cursor] = net_idx;
             auto &bwd_pip = graph.pips.at(visited_bwd.at(bwd_cursor));
+            block_sites(bwd_pip);
             bwd_cursor = bwd_pip.dst_node;
         }
         bwd_nodes.push_back(src_node);
@@ -243,6 +274,8 @@ struct FuzzGenWorker {
         auto site_str = site.str(&ctx);
         log_verbose("adding pin %s/%s/%s on net %d\n", site_str.c_str(), bel.c_str(&ctx), cell_pin.c_str(&ctx), net);
 #endif
+        if (routethru_sites.count(site))
+            return false; // don't place cells in the same site as routethru pips
         auto &cell_inst = cells[std::make_pair(site, bel)];
         if (cell_inst.cell_type == IdString()) {
             cell_inst.cell_type = cell_type;
@@ -258,6 +291,7 @@ struct FuzzGenWorker {
                 return false;
         }
         cell_inst.pin2net[cell_pin] = net;
+        used_sites.insert(site);
         return true;
     }
 
@@ -279,7 +313,7 @@ struct FuzzGenWorker {
 
     bool process_sitepin(int net, SitePin pin, bool is_input) {
         TileKey site = pin.site;
-        if (site.prefix.in(id_BUFGCE, id_BUFGCE_DIV, id_BUFG_PS, id_BUFG_GT)) {
+        if (site.prefix.in(id_BUFGCE, id_BUFGCE_DIV, id_BUFG_PS/*, id_BUFG_GT*/)) {
             IdString bel = (site.prefix == id_BUFGCE) ? id_BUFCE : site.prefix;
             if (pin.pin == id_CE_PRE_OPTINV && is_input && site.prefix != id_BUFG_GT)
                 return add_net_pin(net, site, bel, site.prefix, id_CE);
@@ -364,7 +398,7 @@ struct FuzzGenWorker {
         for (auto &cell : cells) {
             int idx = cell.second.cell_idx;
             out << "set c [create_cell -reference " << cell.second.cell_type.c_str(&ctx) << " c" << idx << "]" << std::endl;
-            if (cell.second.cell_type.in(id_VCC, id_GND)) {
+            if (!cell.second.cell_type.in(id_VCC, id_GND)) {
                 if (cell.first.second == IdString())
                     out << "place_cell $c " << cell.first.first.str(&ctx) << std::endl;
                 else
@@ -384,7 +418,8 @@ struct FuzzGenWorker {
                 out << "set n [create_net c" << idx << "_io]" << std::endl;
                 out << "connect_net -net $n -objects {c" << idx << "_io c" << idx << "/I}" << std::endl;
             } else if (cell.second.cell_type == id_BUFG_GT) {
-                int sync_idx = idx;
+                // TODO: broken
+                int sync_idx = next_cell_idx++;
                 out << "set c [create_cell -reference BUFG_GT_SYNC c" << sync_idx << "]" << std::endl;
                 auto sync_prefix =  cell.first.first;
                 sync_prefix.prefix = id_BUFG_GT_SYNC;
@@ -427,6 +462,8 @@ struct FuzzGenWorker {
         cells.clear();
         net2route.clear();
         try_pips.clear();
+        used_sites.clear();
+        routethru_sites.clear();
         // sort pips randomly first, then by lowest coverage
         for (auto ttp : avail_ttpips)
             try_pips.push_back(ttp);
@@ -466,7 +503,7 @@ struct FuzzGenWorker {
         setup_tiletypes();
         log_info("Total of %d tiletype-pips to test\n", int(avail_ttpips.size()));
         int net = 0;
-        for (int design = 0; design < (args.named.count("num-designs") ? std::stoi(args.named.at("num-designs").at(0)) : 20); design++) {
+        for (int design = 1; design <= (args.named.count("num-designs") ? std::stoi(args.named.at("num-designs").at(0)) : 20); design++) {
             setup_design();
             for (int i = 0; i < 50000; i++) {
                 net++;
