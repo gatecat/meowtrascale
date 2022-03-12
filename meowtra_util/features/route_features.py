@@ -58,10 +58,20 @@ def process_net(f, net):
             if any(wire.wire.startswith(x) for x in \
                 ("CLK_TEST_BUF_SITE_", "CLK_HROUTE_", "CLK_HDISTR_", "CLK_VDISTR_")):
                 f.add(f"{wire.tile}.WIRE.{wire.wire}.USED")
+
 def route_features(des):
     f = set()
     for net in des.nets.values():
         process_net(f, net)
+    # write out default-configured cell pseudo-features to decorrelate site and routing bits
+    g = Tilegrid()
+    for cell in des.cells.values():
+        if cell.name[0] != 'c' or not cell.name[1:].isdigit():
+            continue
+        if not cell.is_leaf or cell.bel is None:
+            continue
+        t, dx, dy = g.lookup_site(cell.bel.site)
+        f.add(f"{t}.{cell.bel.site.rsplit('_', 2)[0]}.{cell.bel.bel}.__DEFAULT")
     return f
 
 if __name__ == '__main__':

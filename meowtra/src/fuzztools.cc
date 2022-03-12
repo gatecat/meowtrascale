@@ -147,14 +147,17 @@ struct FuzzGenWorker {
 
         int fwd_iter = 0;
         index_t fwd_endpoint = -1;
+        bool vcc_allowed = false;
         while (!queue_fwd.empty() && fwd_iter++ < iter_limit) {
             index_t cursor = queue_fwd.front();
             queue_fwd.pop();
             auto &cursor_node = graph.nodes.at(cursor);
-            if (!cursor_node.pins.empty()) {
+            if (!cursor_node.pins.empty() && (rng.rng(10) > 5)) {
                 for (auto &pin : cursor_node.pins) {
                     if (!process_sitepin(net_idx, pin, true))
                         continue;
+                    if (pin.pin == id_CLK_IN)
+                        vcc_allowed = true;
                     fwd_endpoint = cursor;
                     break;
                 }
@@ -192,10 +195,10 @@ struct FuzzGenWorker {
             index_t cursor = queue_bwd.front();
             queue_bwd.pop();
             auto &cursor_node = graph.nodes.at(cursor);
-            /* if (process_constant(net_idx, cursor)) { // can tie to a constant
+            if (vcc_allowed && (rng.rng(10) > 3) && process_const_vcc(net_idx, cursor)) { // can tie to a constant
                 bwd_startpoint = cursor;
                 break;
-            } */
+            }
             if (!cursor_node.pins.empty()) {
                 for (auto &pin : cursor_node.pins) {
                     if (!process_sitepin(net_idx, pin, false))
@@ -295,19 +298,19 @@ struct FuzzGenWorker {
         return true;
     }
 
-    bool process_constant(int net, index_t node) {
+    bool process_const_vcc(int net, index_t node) {
         auto &node_data = graph.nodes.at(node);
         const std::string &name = node_data.name.str(&ctx);
-        bool is_vcc = name.starts_with("VCC_WIRE"), is_gnd = name.starts_with("GND_WIRE");
-        if (!is_vcc && !is_gnd)
+        bool is_vcc = name.starts_with("VCC_WIRE");
+        if (!is_vcc)
             return false;
         auto node_key = std::make_pair(node_data.tile, node_data.name);
         if (cells.count(node_key))
             return false;
         auto &cell_inst = cells[node_key];
-        cell_inst.cell_type = (is_vcc ? id_VCC : id_GND);
+        cell_inst.cell_type = id_VCC;
         cell_inst.cell_idx = int(cells.size());
-        cell_inst.pin2net[is_vcc ? id_P : id_G] = net;
+        cell_inst.pin2net[id_P] = net;
         return true;
     }
 
@@ -346,8 +349,10 @@ struct FuzzGenWorker {
                 return add_net_pin(net, site, (pin.pin == id_CLK2) ? id_EFF : id_AFF, id_FDRE, id_C);
             } else if ((pin.pin == id_SRST1 || pin.pin == id_SRST2) && is_input) {
                 return add_net_pin(net, site, (pin.pin == id_SRST2) ? id_EFF : id_AFF, id_FDRE, id_R);
-            } else if ((pin.pin == id_CKEN1 || pin.pin == id_CKEN2) && is_input) {
-                return add_net_pin(net, site, (pin.pin == id_CKEN2) ? id_EFF : id_AFF, id_FDRE, id_CE);
+            } else if ((pin.pin == id_CKEN1 || pin.pin == id_CKEN3) && is_input) {
+                return add_net_pin(net, site, (pin.pin == id_CKEN3) ? id_EFF : id_AFF, id_FDRE, id_CE);
+            } else if ((pin.pin == id_CKEN2 || pin.pin == id_CKEN4) && is_input) {
+                return add_net_pin(net, site, (pin.pin == id_CKEN4) ? id_EFF2 : id_AFF2, id_FDRE, id_CE);
             } else if (!is_input) {
                 const std::string &pin_str = pin.pin.str(&ctx);
                 if (pin_str.size() == 3 && pin_str.substr(1) == "_O")

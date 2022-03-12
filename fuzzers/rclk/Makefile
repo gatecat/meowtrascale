@@ -27,6 +27,4 @@ work/rclk_%.dump: work/gen_design_%.tcl
 work/correlate.log: $(FEATURES)
 	../../meowtra/build/meowtra correlate -tiles 'RCLK*,CMT*' work/ > $@
 
-
-
-
+.PRECIOUS: %.dump %.features
