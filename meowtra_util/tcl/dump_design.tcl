@@ -23,8 +23,22 @@ proc dump_design {out_name} {
 		}
 	}
 
+	set seen_vcc 0
+	set seen_gnd 0
+
 	foreach net [get_nets] {
 		puts $fp ".net [get_property NAME $net]"
+		foreach pin [get_site_pins -of_objects $net] {
+			puts $fp ".sitepin $pin [get_property DIRECTION $pin] [get_nodes -of_objects $pin]"
+		}
+		if {[get_property TYPE $net] == "GROUND"} {
+			if {$seen_gnd == 1} { continue }
+			set seen_gnd 1
+		}
+		if {[get_property TYPE $net] == "POWER"} {
+			if {$seen_vcc == 1} { continue }
+			set seen_vcc 1
+		}
 		puts $fp ".route [get_property ROUTE $net]"
 		foreach pip [get_pips -of_objects $net] {
 			set n0 [get_nodes -uphill -of_objects $pip ]
@@ -38,9 +52,6 @@ proc dump_design {out_name} {
 			foreach wire [get_wires -of_objects $n1] {
 				puts $fp ".drv_wire $wire"
 			}
-		}
-		foreach pin [get_site_pins -of_objects $net] {
-			puts $fp ".sitepin $pin [get_property DIRECTION $pin] [get_nodes -of_objects $pin]"
 		}
 	}
 
