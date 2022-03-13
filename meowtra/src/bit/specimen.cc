@@ -30,22 +30,31 @@ void SpecimenGroup::find_deps() {
 void SpecimenGroup::solve(Context *ctx) {
     // sort by fewest dependencies first
     std::vector<Feature> to_solve;
+    dict<Feature, index_t> feature_count;
     for (auto &dep : dependencies)
         to_solve.push_back(dep.first);
-    std::stable_sort(to_solve.begin(), to_solve.end(), [&](Feature a, Feature b) {
-        return dependencies.at(a).size() < dependencies.at(b).size();
-    });
-    dict<Feature, pool<index_t>> result;
-    pool<index_t> set_with_feature;
-    std::vector<index_t> to_remove;
-    dict<Feature, index_t> feature_count;
     for (auto feat : to_solve) {
-        bool found = false;
-        set_with_feature.clear();
         for (auto &spec : specs) {
             if (!spec.features.count(feat))
                 continue;
             ++feature_count[feat];
+        }
+    }
+    std::stable_sort(to_solve.begin(), to_solve.end(), [&](Feature a, Feature b) {
+        int da = dependencies.at(a).size();
+        int db = dependencies.at(b).size();
+        return (da < db) || ((da == db) && (feature_count.at(a) >= feature_count.at(b)));
+    });
+    dict<Feature, pool<index_t>> result;
+    pool<index_t> set_with_feature, already_explained;
+    std::vector<index_t> to_remove;
+    for (auto feat : to_solve) {
+        bool found = false;
+        set_with_feature.clear();
+        already_explained.clear();
+        for (auto &spec : specs) {
+            if (!spec.features.count(feat))
+                continue;
             if (!found) {
                 // first time we hit feature, add all not set in dependent features
                 for (auto set : spec.set_bits)
@@ -66,8 +75,49 @@ void SpecimenGroup::solve(Context *ctx) {
                 for (auto unset_bit : to_remove)
                     set_with_feature.erase(unset_bit);
             }
-            result[feat] = set_with_feature;
         }
+        for (auto &spec : specs) {
+            if (!spec.features.count(feat))
+                continue;
+        }
+        result[feat] = set_with_feature;
+    }
+    // eliminate already explained (TODO: speedup ?)
+    dict<index_t, pool<Feature>> bit2feat;
+    for (auto &r : result) {
+        for (auto bit : r.second)
+            bit2feat[bit].insert(r.first);
+    }
+    for (auto feat : to_solve) {
+        if (!result.count(feat))
+            continue;
+        auto &feat_bits = result[feat];
+        pool<index_t> feat_already_explained = feat_bits;
+        std::vector<index_t> unexplained;
+        for (auto &spec : specs) {
+            if (!spec.features.count(feat))
+                continue;
+            if (feat_already_explained.empty())
+                break; // don't waste effort
+            unexplained.clear();
+            for (auto ae_bit : feat_already_explained) {
+                bool is_explained = false;
+                for (auto &overlap_feat : bit2feat.at(ae_bit)) {
+                    if (overlap_feat == feat)
+                        continue;
+                    if (spec.features.count(overlap_feat)) {
+                        is_explained = true;
+                        break;
+                    }
+                }
+                if (!is_explained)
+                    unexplained.push_back(ae_bit);
+            }
+            for (auto ue_bit : unexplained)
+                feat_already_explained.erase(ue_bit);
+        }
+        for (auto ae_bit : feat_already_explained)
+            feat_bits.erase(ae_bit);
     }
     // sort nicely
     std::vector<Feature> to_print(to_solve.begin(), to_solve.end());
