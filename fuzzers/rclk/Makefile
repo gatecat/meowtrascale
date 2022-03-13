@@ -1,6 +1,6 @@
 # TODO: factor out common parts
 
-N=600
+N=300
 VIVADO?=/opt/Xilinx/Vivado/2020.2/bin/vivado
 
 ITERS=$(shell seq 1 1 $(N))
@@ -25,6 +25,7 @@ work/rclk_%.dump: work/gen_design_%.tcl
 	pypy3 -m meowtra_util.features.route_features $^ $@
 
 work/correlate.log: $(FEATURES)
-	../../meowtra/build/meowtra correlate -tiles 'RCLK*,CMT*' work/ > $@
+	../../meowtra/build/meowtra correlate -tiles 'RCLK*,CMT*' -filter EXCL_CMT_DRP work/ > $@
 
-.PRECIOUS: %.dump %.features
+.PRECIOUS: $(FEATURES) $(patsubst %,work/rclk_%.dump,$(ITERS))
+

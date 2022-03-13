@@ -95,6 +95,19 @@ struct CorrelateWorker {
         }
     }
 
+    void filter_bits(const std::string &mode) {
+        bool filter_cmt = (mode == "EXCL_CMT_DRP");
+        for (auto &des : tile_bits) {
+            for (auto &tile : des.tiles) {
+                // exclude the DRP part of CMT tiles (PLL stuff)
+                if (tile.first.prefix == id_CMT_L && filter_cmt) {
+                    for (int i = 0; i < (4*60*48); i++)
+                        tile.second.set_bits.erase(i);
+                }
+            }
+        }
+    }
+
     void do_correlate(IdString tt) {
         SpecimenGroup group;
         for (index_t i = 0; i < index_t(tile_bits.size()); i++) {
@@ -122,6 +135,8 @@ struct CorrelateWorker {
         find_files();
         parse_files();
         filter_tiles();
+        if (args.named.count("filter"))
+            filter_bits(args.named.at("filter").at(0));
         for (auto tt : included_tiletypes)
             do_correlate(tt);
     }
@@ -138,6 +153,7 @@ struct CorrelateWorker {
 int subcmd_correlate(int argc, const char *argv[]) {
     CmdlineParser parser;
     parser.add_opt("v", 0, "verbose output");
+    parser.add_opt("filter", 1, "filter mode");
     parser.add_opt("tiles", 1, "comma separated list of tile types");
     parser.add_opt("min-count", 1, "minimum number of samples for a feature");
     parser.add_positional("folder", false, "specimen folder");

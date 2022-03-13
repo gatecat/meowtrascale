@@ -124,145 +124,152 @@ struct FuzzGenWorker {
         }
     }
 
-    bool do_route(int net_idx, TileTypePip ttpip) {
+    bool do_route(int net_idx, TileTypePip ttpip, bool is_rare) {
         auto &tt = tile_types.at(tile_type_keys(ttpip.tile_type));
-        auto &ti = tt.tile_pips.at(rng.rng(tt.tile_pips.size()));
-        if (!ti.count(ttpip.pip_name))
-            return false;
-        index_t pip = ti.at(ttpip.pip_name);
-        auto &pip_data = graph.pips.at(pip);
-        if (node2net.count(pip_data.src_node) || node2net.count(pip_data.dst_node) || is_routethru_blocked(pip_data))
-            return false;
-        index_t src_node = pip_data.src_node;
-        index_t dst_node = pip_data.dst_node;
-        if (pip_data.bidi && rng.rng(2))
-            std::swap(src_node, dst_node);
-        dict<index_t, index_t> visited_fwd, visited_bwd;
-        if (verbose_flag)
-            log_verbose("trying %s --> %s\n", node_name(src_node), node_name(dst_node));
-        std::queue<index_t> queue_fwd, queue_bwd;
-        visited_fwd[dst_node] = pip;
-        visited_fwd[src_node] = -1; // disallow in fwd cone
-        queue_fwd.push(dst_node);
+        // Up to 2-20 attempts
+        for (int i = 0; i < (is_rare ? 20 : 2); i++) {
+            auto &ti = tt.tile_pips.at(rng.rng(tt.tile_pips.size()));
+            if (!ti.count(ttpip.pip_name))
+                continue;
+            index_t pip = ti.at(ttpip.pip_name);
+            auto &pip_data = graph.pips.at(pip);
+            if (node2net.count(pip_data.src_node) || node2net.count(pip_data.dst_node) || is_routethru_blocked(pip_data))
+                continue;
+            index_t src_node = pip_data.src_node;
+            index_t dst_node = pip_data.dst_node;
+            if (pip_data.bidi && rng.rng(2))
+                std::swap(src_node, dst_node);
+            dict<index_t, index_t> visited_fwd, visited_bwd;
+            if (verbose_flag)
+                log_verbose("trying %s --> %s\n", node_name(src_node), node_name(dst_node));
+            std::queue<index_t> queue_fwd, queue_bwd;
+            visited_fwd[dst_node] = pip;
+            visited_fwd[src_node] = -1; // disallow in fwd cone
+            queue_fwd.push(dst_node);
 
-        int fwd_iter = 0;
-        index_t fwd_endpoint = -1;
-        bool vcc_allowed = false;
-        while (!queue_fwd.empty() && fwd_iter++ < iter_limit) {
-            index_t cursor = queue_fwd.front();
-            queue_fwd.pop();
-            auto &cursor_node = graph.nodes.at(cursor);
-            if (!cursor_node.pins.empty() && (rng.rng(10) > 5)) {
-                for (auto &pin : cursor_node.pins) {
-                    if (!process_sitepin(net_idx, pin, true))
-                        continue;
-                    if (pin.pin == id_CLK_IN)
-                        vcc_allowed = true;
-                    fwd_endpoint = cursor;
-                    break;
+            int fwd_iter = 0;
+            index_t fwd_endpoint = -1;
+            bool vcc_allowed = false;
+            SitePin dst_pin{TileKey(), IdString()};
+            while (!queue_fwd.empty() && fwd_iter++ < iter_limit) {
+                index_t cursor = queue_fwd.front();
+                queue_fwd.pop();
+                auto &cursor_node = graph.nodes.at(cursor);
+                if (!cursor_node.pins.empty() && (rng.rng(10) > 5)) {
+                    for (auto &pin : cursor_node.pins) {
+                        if (!process_sitepin(net_idx, pin, true, /*do_bind*/ false))
+                            continue;
+                        if (pin.pin == id_CLK_IN)
+                            vcc_allowed = true;
+                        dst_pin = pin;
+                        fwd_endpoint = cursor;
+                        break;
+                    }
+                    if (fwd_endpoint != -1)
+                        break;
                 }
-                if (fwd_endpoint != -1)
-                    break;
-            }
-            for (index_t pip_dh : cursor_node.pips_downhill) {
-                if (used_pips.count(pip_dh))
-                    continue;
-                auto &cursor_pip = graph.pips.at(pip_dh);
-                if (node2net.count(cursor_pip.dst_node) || visited_fwd.count(cursor_pip.dst_node) || is_routethru_blocked(cursor_pip))
-                    continue;
-                visited_fwd[cursor_pip.dst_node] = pip_dh;
-                queue_fwd.push(cursor_pip.dst_node);
-            }
-        }
-
-        if (fwd_endpoint == -1)
-            return false; // no endpoint reached
-
-        visited_bwd[src_node] = pip;
-        // disallow fwd cone in bwd cone
-        index_t fwd_cursor = fwd_endpoint;
-        while (fwd_cursor != dst_node) {
-            visited_bwd[fwd_cursor] = -1;
-            auto &fwd_pip = graph.pips.at(visited_fwd.at(fwd_cursor));
-            fwd_cursor = fwd_pip.src_node;
-        }
-        visited_bwd[dst_node] = -1; // disallow in bwd cone
-        queue_bwd.push(src_node);
-
-        int bwd_iter = 0;
-        index_t bwd_startpoint = -1;
-        while (!queue_bwd.empty() && bwd_iter++ < iter_limit) {
-            index_t cursor = queue_bwd.front();
-            queue_bwd.pop();
-            auto &cursor_node = graph.nodes.at(cursor);
-            if (vcc_allowed && (rng.rng(10) > 3) && process_const_vcc(net_idx, cursor)) { // can tie to a constant
-                bwd_startpoint = cursor;
-                break;
-            }
-            if (!cursor_node.pins.empty()) {
-                for (auto &pin : cursor_node.pins) {
-                    if (!process_sitepin(net_idx, pin, false))
+                for (index_t pip_dh : cursor_node.pips_downhill) {
+                    if (used_pips.count(pip_dh))
                         continue;
+                    auto &cursor_pip = graph.pips.at(pip_dh);
+                    if (node2net.count(cursor_pip.dst_node) || visited_fwd.count(cursor_pip.dst_node) || is_routethru_blocked(cursor_pip))
+                        continue;
+                    visited_fwd[cursor_pip.dst_node] = pip_dh;
+                    queue_fwd.push(cursor_pip.dst_node);
+                }
+            }
+
+            if (fwd_endpoint == -1)
+                continue; // no endpoint reached
+
+            visited_bwd[src_node] = pip;
+            // disallow fwd cone in bwd cone
+            index_t fwd_cursor = fwd_endpoint;
+            while (fwd_cursor != dst_node) {
+                visited_bwd[fwd_cursor] = -1;
+                auto &fwd_pip = graph.pips.at(visited_fwd.at(fwd_cursor));
+                fwd_cursor = fwd_pip.src_node;
+            }
+            visited_bwd[dst_node] = -1; // disallow in bwd cone
+            queue_bwd.push(src_node);
+
+            int bwd_iter = 0;
+            index_t bwd_startpoint = -1;
+            while (!queue_bwd.empty() && bwd_iter++ < iter_limit) {
+                index_t cursor = queue_bwd.front();
+                queue_bwd.pop();
+                auto &cursor_node = graph.nodes.at(cursor);
+                if (vcc_allowed && (rng.rng(10) > 3) && process_const_vcc(net_idx, cursor)) { // can tie to a constant
                     bwd_startpoint = cursor;
                     break;
                 }
-                if (bwd_startpoint != -1)
-                    break;
+                if (!cursor_node.pins.empty()) {
+                    for (auto &pin : cursor_node.pins) {
+                        if (!process_sitepin(net_idx, pin, false))
+                            continue;
+                        bwd_startpoint = cursor;
+                        break;
+                    }
+                    if (bwd_startpoint != -1)
+                        break;
+                }
+                for (index_t pip_uh : cursor_node.pips_uphill) {
+                    if (used_pips.count(pip_uh))
+                        continue;
+                    auto &cursor_pip = graph.pips.at(pip_uh);
+                    if (node2net.count(cursor_pip.src_node) || visited_bwd.count(cursor_pip.src_node) || is_routethru_blocked(cursor_pip))
+                        continue;
+                    visited_bwd[cursor_pip.src_node] = pip_uh;
+                    queue_bwd.push(cursor_pip.src_node);
+                }
             }
-            for (index_t pip_uh : cursor_node.pips_uphill) {
-                if (used_pips.count(pip_uh))
-                    continue;
-                auto &cursor_pip = graph.pips.at(pip_uh);
-                if (node2net.count(cursor_pip.src_node) || visited_bwd.count(cursor_pip.src_node) || is_routethru_blocked(cursor_pip))
-                    continue;
-                visited_bwd[cursor_pip.src_node] = pip_uh;
-                queue_bwd.push(cursor_pip.src_node);
+
+            if (bwd_startpoint == -1)
+                continue; // no startpoint found
+
+            log_verbose("    success (%d fwd %d bwd)!\n", fwd_iter, bwd_iter);
+
+            // do bind
+            process_sitepin(net_idx, dst_pin, true, /*do_bind*/ true);
+            used_pips.insert(pip);
+            node2net[src_node] = net_idx;
+            node2net[dst_node] = net_idx;
+            block_sites(pip_data);
+            std::vector<index_t> fwd_nodes, bwd_nodes;
+            fwd_cursor = fwd_endpoint;
+            log_verbose("    fwd path:\n");
+            while (fwd_cursor != dst_node) {
+                fwd_nodes.push_back(fwd_cursor);
+                if (verbose_flag)
+                    log_verbose("        %s\n", node_name(fwd_cursor));
+                node2net[fwd_cursor] = net_idx;
+                auto &fwd_pip = graph.pips.at(visited_fwd.at(fwd_cursor));
+                block_sites(fwd_pip);
+                fwd_cursor = fwd_pip.src_node;
             }
+            fwd_nodes.push_back(dst_node);
+            log_verbose("    bwd path:\n");
+            index_t bwd_cursor = bwd_startpoint;
+            while (bwd_cursor != src_node) {
+                bwd_nodes.push_back(bwd_cursor);
+                if (verbose_flag)
+                    log_verbose("        %s\n", node_name(bwd_cursor));
+                node2net[bwd_cursor] = net_idx;
+                auto &bwd_pip = graph.pips.at(visited_bwd.at(bwd_cursor));
+                block_sites(bwd_pip);
+                bwd_cursor = bwd_pip.dst_node;
+            }
+            bwd_nodes.push_back(src_node);
+            std::reverse(fwd_nodes.begin(), fwd_nodes.end());
+            net2route[net_idx].clear();
+            for (auto node : bwd_nodes)
+                net2route[net_idx].push_back(node);
+            for (auto node : fwd_nodes)
+                net2route[net_idx].push_back(node);
+            covered_ttpips[ttpip] += 1;
+            return true;
         }
-
-        if (bwd_startpoint == -1)
-            return false; // no startpoint found
-
-        log_verbose("    success (%d fwd %d bwd)!\n", fwd_iter, bwd_iter);
-
-        // do bind
-        used_pips.insert(pip);
-        node2net[src_node] = net_idx;
-        node2net[dst_node] = net_idx;
-        block_sites(pip_data);
-        std::vector<index_t> fwd_nodes, bwd_nodes;
-        fwd_cursor = fwd_endpoint;
-        log_verbose("    fwd path:\n");
-        while (fwd_cursor != dst_node) {
-            fwd_nodes.push_back(fwd_cursor);
-            if (verbose_flag)
-                log_verbose("        %s\n", node_name(fwd_cursor));
-            node2net[fwd_cursor] = net_idx;
-            auto &fwd_pip = graph.pips.at(visited_fwd.at(fwd_cursor));
-            block_sites(fwd_pip);
-            fwd_cursor = fwd_pip.src_node;
-        }
-        fwd_nodes.push_back(dst_node);
-        log_verbose("    bwd path:\n");
-        index_t bwd_cursor = bwd_startpoint;
-        while (bwd_cursor != src_node) {
-            bwd_nodes.push_back(bwd_cursor);
-            if (verbose_flag)
-                log_verbose("        %s\n", node_name(bwd_cursor));
-            node2net[bwd_cursor] = net_idx;
-            auto &bwd_pip = graph.pips.at(visited_bwd.at(bwd_cursor));
-            block_sites(bwd_pip);
-            bwd_cursor = bwd_pip.dst_node;
-        }
-        bwd_nodes.push_back(src_node);
-        std::reverse(fwd_nodes.begin(), fwd_nodes.end());
-        net2route[net_idx].clear();
-        for (auto node : bwd_nodes)
-            net2route[net_idx].push_back(node);
-        for (auto node : fwd_nodes)
-            net2route[net_idx].push_back(node);
-        covered_ttpips[ttpip] += 1;
-        return true;
+        return false;
     }
 
     struct CellInst {
@@ -272,14 +279,25 @@ struct FuzzGenWorker {
     };
     dict<std::pair<TileKey, IdString>, CellInst> cells;
 
-    bool add_net_pin(int net, TileKey site, IdString bel, IdString cell_type, IdString cell_pin) {
+    bool add_net_pin(int net, TileKey site, IdString bel, IdString cell_type, IdString cell_pin, bool do_bind) {
 #if 0
         auto site_str = site.str(&ctx);
         log_verbose("adding pin %s/%s/%s on net %d\n", site_str.c_str(), bel.c_str(&ctx), cell_pin.c_str(&ctx), net);
 #endif
         if (routethru_sites.count(site))
             return false; // don't place cells in the same site as routethru pips
-        auto &cell_inst = cells[std::make_pair(site, bel)];
+        auto key = std::make_pair(site, bel);
+        if (!do_bind) {
+            if (cells.count(key) && cells.at(key).pin2net.count(cell_pin)) {
+                int pin_net = cells.at(key).pin2net.at(cell_pin);
+                // only need to skip if the net the pin is supposedly bound to exists
+                // TODO: probably shouldn't bind nets to pins until routing actually succeeds...
+                if (net2route.count(pin_net) || pin_net == net)
+                    return false;
+            }
+            return true;
+        }
+        auto &cell_inst = cells[key];
         if (cell_inst.cell_type == IdString()) {
             cell_inst.cell_type = cell_type;
             cell_inst.cell_idx = int(cells.size());
@@ -314,68 +332,67 @@ struct FuzzGenWorker {
         return true;
     }
 
-    bool process_sitepin(int net, SitePin pin, bool is_input) {
+    bool process_sitepin(int net, SitePin pin, bool is_input, bool do_bind = true) {
         TileKey site = pin.site;
         if (site.prefix.in(id_BUFGCE, id_BUFGCE_DIV, id_BUFG_PS/*, id_BUFG_GT*/)) {
             IdString bel = (site.prefix == id_BUFGCE) ? id_BUFCE : site.prefix;
             if (pin.pin == id_CE_PRE_OPTINV && is_input && site.prefix != id_BUFG_GT)
-                return add_net_pin(net, site, bel, site.prefix, id_CE);
+                return add_net_pin(net, site, bel, site.prefix, id_CE, do_bind);
             if (pin.pin == id_CLK_IN && is_input)
-                return add_net_pin(net, site, bel, site.prefix, id_I);
+                return add_net_pin(net, site, bel, site.prefix, id_I, do_bind);
             if (pin.pin == id_CLK_OUT && !is_input)
-                return add_net_pin(net, site, bel, site.prefix, id_O);
+                return add_net_pin(net, site, bel, site.prefix, id_O, do_bind);
         } else if (site.prefix == id_BUFGCE_HDIO) {
             if (pin.pin == id_CLK_IN && is_input)
-                return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_I);
+                return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_I, do_bind);
             if (pin.pin == id_CLK_OUT && !is_input)
-                return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_O);
+                return add_net_pin(net, site, id_BUFCE, id_BUFGCE, id_O, do_bind);
         } else if (site.prefix == id_BUFGCTRL) {
             if (pin.pin == id_CLK_I0 && is_input)
-                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_I0);
+                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_I0, do_bind);
             if (pin.pin == id_CLK_I1 && is_input)
-                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_I1);
+                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_I1, do_bind);
             if (pin.pin == id_CLK_OUT && !is_input)
-                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_O);
+                return add_net_pin(net, site, id_BUFGCTRL, id_BUFGCTRL, id_O, do_bind);
         } else if ((site.prefix == id_BUFCE_ROW || site.prefix == id_BUFCE_ROW_FSR) && pin.pin == id_CLK_OUT && !is_input) {
-            return add_net_pin(net, site, id_BUFCE, id_BUFCE_ROW, id_O);
+            return add_net_pin(net, site, id_BUFCE, id_BUFCE_ROW, id_O, do_bind);
         } else if (site.prefix == id_BUFCE_LEAF) {
             if (pin.pin == id_CLK_IN && is_input)
-                return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_I);
+                return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_I, do_bind);
             else if (pin.pin == id_CE_INT && is_input)
-                return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_CE);
+                return add_net_pin(net, site, id_BUFCE, id_BUFCE_LEAF, id_CE, do_bind);
             return false; // return log churn
         } else if (site.prefix == id_SLICE) {
             if ((pin.pin == id_CLK1 || pin.pin == id_CLK2) && is_input) {
-                return add_net_pin(net, site, (pin.pin == id_CLK2) ? id_EFF : id_AFF, id_FDRE, id_C);
+                return add_net_pin(net, site, (pin.pin == id_CLK2) ? id_EFF : id_AFF, id_FDRE, id_C, do_bind);
             } else if ((pin.pin == id_SRST1 || pin.pin == id_SRST2) && is_input) {
-                return add_net_pin(net, site, (pin.pin == id_SRST2) ? id_EFF : id_AFF, id_FDRE, id_R);
+                return add_net_pin(net, site, (pin.pin == id_SRST2) ? id_EFF : id_AFF, id_FDRE, id_R, do_bind);
             } else if ((pin.pin == id_CKEN1 || pin.pin == id_CKEN3) && is_input) {
-                return add_net_pin(net, site, (pin.pin == id_CKEN3) ? id_EFF : id_AFF, id_FDRE, id_CE);
+                return add_net_pin(net, site, (pin.pin == id_CKEN3) ? id_EFF : id_AFF, id_FDRE, id_CE, do_bind);
             } else if ((pin.pin == id_CKEN2 || pin.pin == id_CKEN4) && is_input) {
-                return add_net_pin(net, site, (pin.pin == id_CKEN4) ? id_EFF2 : id_AFF2, id_FDRE, id_CE);
+                return add_net_pin(net, site, (pin.pin == id_CKEN4) ? id_EFF2 : id_AFF2, id_FDRE, id_CE, do_bind);
             } else if (!is_input) {
                 const std::string &pin_str = pin.pin.str(&ctx);
                 if (pin_str.size() == 3 && pin_str.substr(1) == "_O")
-                    return add_net_pin(net, site, ctx.id(stringf("%c6LUT", pin_str.at(0))), id_LUT1, id_O);
+                    return add_net_pin(net, site, ctx.id(stringf("%c6LUT", pin_str.at(0))), id_LUT1, id_O, do_bind);
                 if (pin_str.size() >= 2 && pin_str.at(1) == 'Q')
-                    return add_net_pin(net, site, ctx.id(stringf("%cFF%s", pin_str.at(0), pin_str.c_str() + 2)), id_FDRE, id_Q);
+                    return add_net_pin(net, site, ctx.id(stringf("%cFF%s", pin_str.at(0), pin_str.c_str() + 2)), id_FDRE, id_Q, do_bind);
             }
         } else if (site.prefix == id_MMCM) {
             if (is_input ? pin.pin.in(id_CLKIN1, id_CLKIN2, id_CLKFBIN) :
                     pin.pin.in(id_CLKFBOUT, id_CLKFBOUTB, id_CLKOUT0, id_CLKOUT0B, id_CLKOUT1, id_CLKOUT1B, id_CLKOUT2, id_CLKOUT2B,
                         id_CLKOUT3, id_CLKOUT3B, id_CLKOUT4, id_CLKOUT5, id_CLKOUT6))
-                return add_net_pin(net, site, id_MMCM, id_MMCME4_ADV, pin.pin);
-                } else if (site.prefix == id_MMCM) {
+                return add_net_pin(net, site, id_MMCM, id_MMCME4_ADV, pin.pin, do_bind);
         } else if (site.prefix == id_PLL) {
             if (is_input ? pin.pin.in(id_CLKIN, id_CLKFBIN) :
                     pin.pin.in(id_CLKFBOUT, id_CLKOUT0, id_CLKOUT0B, id_CLKOUT1, id_CLKOUT1B, id_CLKOUTPHY))
-                return add_net_pin(net, site, id_PLL, id_PLLE4_ADV, pin.pin);
+                return add_net_pin(net, site, id_PLL, id_PLLE4_ADV, pin.pin, do_bind);
         } else if (site.prefix == id_BITSLICE_RX_TX) {
             if (is_input && pin.pin.in(id_RX_CLK, id_TX_CLK))
-                return add_net_pin(net, site, id_RXTX_BITSLICE, id_RXTX_BITSLICE, pin.pin);
+                return add_net_pin(net, site, id_RXTX_BITSLICE, id_RXTX_BITSLICE, pin.pin, do_bind);
             return false; // return log churn
         } else if (site.prefix == id_IOB && pin.pin == id_I && !is_input) {
-            return add_net_pin(net, site, IdString(), id_IBUF, id_O);
+            return add_net_pin(net, site, IdString(), id_IBUF, id_O, do_bind);
         }
 #if 1
         if (!site.prefix.in(id_GCLK_TEST_BUFE3, id_BUFCE_LEAF, id_BUFCE_ROW, id_BUFCE_ROW_FSR) && verbose_flag) {
@@ -512,7 +529,8 @@ struct FuzzGenWorker {
             setup_design();
             for (int i = 0; i < 50000; i++) {
                 net++;
-                do_route(net, try_pips.at(i % int(try_pips.size())));
+                auto try_pip = try_pips.at(i % int(try_pips.size()));
+                do_route(net, try_pip, covered_ttpips.count(try_pip) ? (covered_ttpips.at(try_pip) < 25) : true);
             }
             write_tcl(design);
         }
