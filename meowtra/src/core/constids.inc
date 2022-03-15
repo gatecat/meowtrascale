@@ -85,3 +85,5 @@ X(VCC)
 X(P)
 X(G)
 X(CMT_L)
+
+X(PS8)

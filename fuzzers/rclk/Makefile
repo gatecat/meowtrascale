@@ -1,6 +1,6 @@
 # TODO: factor out common parts
 
-N=300
+N=900
 VIVADO?=/opt/Xilinx/Vivado/2020.2/bin/vivado
 
 ITERS=$(shell seq 1 1 $(N))

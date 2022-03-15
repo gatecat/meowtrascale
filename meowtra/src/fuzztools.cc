@@ -332,6 +332,24 @@ struct FuzzGenWorker {
         return true;
     }
 
+    const dict<std::string, std::string> ps8_clkmap = {
+        {"PL_CLK0", "PLCLK[0]"},
+        {"PL_CLK1", "PLCLK[1]"},
+        {"PL_CLK2", "PLCLK[2]"},
+        {"PL_CLK3", "PLCLK[3]"},
+        {"FMIO_GEM0_FIFO_TX_CLK_TO_PL_BUFG", "FMIOGEM0FIFOTXCLKTOPLBUFG"},
+        {"FMIO_GEM1_FIFO_TX_CLK_TO_PL_BUFG", "FMIOGEM1FIFOTXCLKTOPLBUFG"},
+        {"FMIO_GEM2_FIFO_TX_CLK_TO_PL_BUFG", "FMIOGEM2FIFOTXCLKTOPLBUFG"},
+        {"FMIO_GEM3_FIFO_TX_CLK_TO_PL_BUFG", "FMIOGEM3FIFOTXCLKTOPLBUFG"},
+        {"FMIO_GEM0_FIFO_RX_CLK_TO_PL_BUFG", "FMIOGEM0FIFORXCLKTOPLBUFG"},
+        {"FMIO_GEM1_FIFO_RX_CLK_TO_PL_BUFG", "FMIOGEM1FIFORXCLKTOPLBUFG"},
+        {"FMIO_GEM2_FIFO_RX_CLK_TO_PL_BUFG", "FMIOGEM2FIFORXCLKTOPLBUFG"},
+        {"FMIO_GEM3_FIFO_RX_CLK_TO_PL_BUFG", "FMIOGEM3FIFORXCLKTOPLBUFG"},
+        {"FMIO_GEM_TSU_CLK_TO_PL_BUFG", "FMIOGEMTSUCLKTOPLBUFG"},
+        {"DP_AUDIO_REF_CLK", "DPAUDIOREFCLK"},
+        {"DP_VIDEO_REF_CLK", "DPVIDEOREFCLK"},
+    };
+
     bool process_sitepin(int net, SitePin pin, bool is_input, bool do_bind = true) {
         TileKey site = pin.site;
         if (site.prefix.in(id_BUFGCE, id_BUFGCE_DIV, id_BUFG_PS/*, id_BUFG_GT*/)) {
@@ -393,6 +411,11 @@ struct FuzzGenWorker {
             return false; // return log churn
         } else if (site.prefix == id_IOB && pin.pin == id_I && !is_input) {
             return add_net_pin(net, site, IdString(), id_IBUF, id_O, do_bind);
+        } else if (site.prefix == id_PS8) {
+            if (!is_input && ps8_clkmap.count(pin.pin.str(&ctx))) {
+                return add_net_pin(net, site, id_PS8, id_PS8, ctx.id(ps8_clkmap.at(pin.pin.str(&ctx))), do_bind);
+            }
+            return false;
         }
 #if 1
         if (!site.prefix.in(id_GCLK_TEST_BUFE3, id_BUFCE_LEAF, id_BUFCE_ROW, id_BUFCE_ROW_FSR) && verbose_flag) {

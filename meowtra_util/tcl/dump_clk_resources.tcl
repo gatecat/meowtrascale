@@ -28,6 +28,11 @@ proc do_visit {node depth} {
 			continue
 		}
 
+		set src_node [get_nodes -uphill -of_objects $pip]
+		if {$pip_tt == "INT" && ([string first "SS12" $src_node] != -1 || [string first "NN12" $src_node] != -1 || [string first "WW12" $src_node] != -1 || [string first "EE12" $src_node] != -1)} {
+			continue
+		}
+
 		incr pip_count
 		if {$pip_tt == "INT" && ($pip_count > 1) } {
 			break
