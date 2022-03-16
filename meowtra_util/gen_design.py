@@ -48,6 +48,7 @@ class Design:
     def __init__(self):
         self.objs = []
         self.site_pip_fuzz = []
+        self.extra_config = []
 
     def add(self, obj):
         self.objs.append(obj)
@@ -61,6 +62,9 @@ class Design:
             if isinstance(obj, Net):
                 obj.write(f)
                 print("", file=f)
+        for cfg in self.extra_config:
+            print(cfg, file=f)
+        print("", file=f)
     def add_io(self, name, direction, site, int_net=None):
         assert direction in ("IN", "OUT")
         top_port = TopPort(name, direction)
@@ -117,9 +121,9 @@ def generate_verilog_tcl(design, verilog, seed, top="top"):
         print(f'read_verilog {os.getcwd()}/work/{design}_{seed}.v', file=f)
         print(f'link_design -top {top}', file=f)
         print(f'write_checkpoint -force {design}_{seed}_preroute.dcp', file=f)
+        print(f'set_property SEVERITY Warning [get_drc_checks]', file=f)
         print(f'place_design', file=f)
         print(f'route_design', file=f)
-        print(f'set_property SEVERITY Warning [get_drc_checks]', file=f)
         print(f'set_property BITSTREAM.GENERAL.PERFRAMECRC YES [current_design]', file=f)
         print(f'write_checkpoint -force {design}_{seed}.dcp', file=f)
         print(f'write_edif -force {design}_{seed}.edf', file=f)

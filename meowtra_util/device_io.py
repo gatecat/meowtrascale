@@ -7,7 +7,7 @@ class Pin:
         self.bank = int(sl[1]) if sl[1] != "" else None
         self.pin_func = sl[2]
         self.site = sl[3]
-        self.site = sl[4]
+        self.site_type = sl[4]
         self.flags = set(sl[5:])
 
     def __str__(self):
