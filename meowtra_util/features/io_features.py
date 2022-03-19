@@ -67,7 +67,7 @@ def io_features(des, extra_cfg):
                 f.add(f"{prefix}.SLEW.{cfg['SLEW']}")
         for x in ("DRIVE", "OUTPUT_IMPEDANCE", "EQUALIZATION", "ODT"):
             if x in cfg:
-                f.add(f"{prefix}.{x}.{x}")
+                f.add(f"{prefix}.{x}.{cfg[x]}")
     return f
 
 if __name__ == '__main__':

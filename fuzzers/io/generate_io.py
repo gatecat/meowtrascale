@@ -214,6 +214,6 @@ def build(seed):
         for bank, iref in sorted(bank_iref.items()):
             if iref is None:
                 continue
-            print(f'bank {iref} INTERNAL_VREF={iref}', file=f)
+            print(f'bank {bank} INTERNAL_VREF={iref}', file=f)
 if __name__ == '__main__':
     build(int(sys.argv[1]))
