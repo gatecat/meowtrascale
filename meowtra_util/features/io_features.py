@@ -16,6 +16,7 @@ def io_features(des, extra_cfg):
                     continue
                 if sl[0] == 'pin':
                     pin_cfg[sl[1]] = dict(x.split('=') for x in sl[3:])
+                    pin_cfg[sl[1]]["PIN"] = sl[2]
                 if sl[0] == 'bank':
                     bank_cfg[int(sl[1])] = dict(x.split('=') for x in sl[2:])
 
@@ -31,23 +32,42 @@ def io_features(des, extra_cfg):
             for bel in cell.bels:
                 if bel.bel == "INBUF": inbuf = cell
                 if bel.bel == "OUTBUF": outbuf = cell
+
+        name = inbuf.name if inbuf is not None else (outbuf.name if outbuf is not None else "")
+        pin = name.split("_")[0] if name != "" else ""
+
+        if pin not in pin_cfg:
+            continue
+        cfg = pin_cfg[pin]
+        prefix = f"{sn}.{cfg['IOSTANDARD']}"
         f.add(f"{sn}.USED")
-        name = ""
+        f.add(f"{prefix}.USED")
+
         if inbuf is not None:
             f.add(f"{sn}.IN")
+            f.add(f"{prefix}.IN")
             if outbuf is None:
                 f.add(f"{sn}.IN_ONLY")
+                f.add(f"{prefix}.IN_ONLY")
             name = inbuf.name
         if outbuf is not None:
             f.add(f"{sn}.OUT")
+            f.add(f"{prefix}.OUT")
             if inbuf is not None:
                 f.add(f"{sn}.IN_OUT")
+                f.add(f"{prefix}.IN_OUT")
             name = outbuf.name
-        pin = name.split("_")[0] if name != "" else ""
-        if pin in pin_cfg:
-            cfg = pin_cfg[pin]
-            if "PULLTYPE" in cfg:
-                f.add(f"{sn}.PULLTYPE.{cfg['PULLTYPE']}")
+
+        if "PULLTYPE" in cfg:
+            f.add(f"{sn}.PULLTYPE.{cfg['PULLTYPE']}")
+        if "SLEW" in cfg:
+            if "DRIVE" in cfg:
+                f.add(f"{prefix}.DRIVE.{cfg['DRIVE']}.SLEW.{cfg['SLEW']}")
+            else:
+                f.add(f"{prefix}.SLEW.{cfg['SLEW']}")
+        for x in ("DRIVE", "OUTPUT_IMPEDANCE", "EQUALIZATION", "ODT"):
+            if x in cfg:
+                f.add(f"{prefix}.{x}.{x}")
     return f
 
 if __name__ == '__main__':
