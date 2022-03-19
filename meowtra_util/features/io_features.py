@@ -22,9 +22,8 @@ def io_features(des, extra_cfg):
     for site in des.sites.values():
         if not site.name.startswith("IOB"):
             continue
-        site_prefix, _, xy = site.name.rpartition('_')
         t, dx, dy = g.lookup_site(site.name)
-        sn = f"{t}.{site_prefix}_X{dx}Y{dy}"
+        sn = f"{t}.{g.site_type[site.name]}_X{dx}Y{dy}"
 
         inbuf = None
         outbuf = None

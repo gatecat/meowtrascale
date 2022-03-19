@@ -87,3 +87,8 @@ X(G)
 X(CMT_L)
 
 X(PS8)
+
+X(HPIO_L)
+X(HPIOB_M)
+X(HPIOB_S)
+X(HPIOB_SNGL)

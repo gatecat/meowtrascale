@@ -39,6 +39,7 @@ class Tilegrid:
     def lookup_site(self, site):
         if self.site_in_tile is None:
             self.site_in_tile = {}
+            self.site_type = {}
             for tile, sites in self.tile_sites.items():
                 split_sites = [self.parse_site(x[0]) for x in sites]
                 # compute relative site coordinates in tile
@@ -50,6 +51,7 @@ class Tilegrid:
                         min_xy[prefix] = (min(min_xy[prefix][0], x), min(min_xy[prefix][1], y))
                 for tile_site, (prefix, x, y) in zip(sites, split_sites):
                     self.site_in_tile[tile_site[0]] = (tile, (x - min_xy[prefix][0]), (y - min_xy[prefix][1]))
+                    self.site_type[tile_site[0]] = tile_site[1]
         return self.site_in_tile[site]
     def sites_by_type(self, site_type):
         result = []

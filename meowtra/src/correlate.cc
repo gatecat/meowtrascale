@@ -8,6 +8,7 @@
 #include "constids.h"
 #include "feature.h"
 #include "specimen.h"
+#include "split_sites.h"
 
 #include <fstream>
 #include <thread>
@@ -131,14 +132,52 @@ struct CorrelateWorker {
         group.solve(&ctx);
     }
 
+    void do_site_correlate(IdString tt) {
+        std::vector<SplitSite> sites;
+        pool<IdString> site_types;
+        for (index_t i = 0; i < index_t(tile_bits.size()); i++) {
+            auto &bits = tile_bits.at(i);
+            auto &feats = tile_feats.at(i);
+            for (auto &feat_tile : feats.tiles) {
+                if (feat_tile.first.prefix != tt)
+                    continue;
+                if (!bits.tiles.count(feat_tile.first))
+                    continue;
+                auto &bit_tile = bits.tiles.at(feat_tile.first);
+                auto result = split_sites(&ctx, tt, bit_tile.set_bits, feat_tile.second);
+                for (auto &s : result) {
+                    sites.push_back(s);
+                    site_types.insert(s.site_type);
+                }
+            }
+        }
+        for (IdString st : site_types) {
+            log_info("processing site type %s...\n", st.c_str(&ctx));
+            SpecimenGroup group;
+            group.tile_bits = 48*30; // TODO
+            for (auto &s : sites) {
+                if (s.site_type != st)
+                    continue;
+                group.specs.emplace_back(s.set_features, s.set_bits);
+            }
+            std::cout << "*** " << st.c_str(&ctx) << " ***" << std::endl;
+            group.find_deps();
+            group.solve(&ctx);
+        }
+    }
+
     void run() {
         find_files();
         parse_files();
         filter_tiles();
         if (args.named.count("filter"))
             filter_bits(args.named.at("filter").at(0));
-        for (auto tt : included_tiletypes)
-            do_correlate(tt);
+        for (auto tt : included_tiletypes) {
+            if (args.named.count("sites"))
+                do_site_correlate(tt);
+            else
+                do_correlate(tt);
+        }
     }
 
     Context ctx;
@@ -155,6 +194,7 @@ int subcmd_correlate(int argc, const char *argv[]) {
     parser.add_opt("v", 0, "verbose output");
     parser.add_opt("filter", 1, "filter mode");
     parser.add_opt("tiles", 1, "comma separated list of tile types");
+    parser.add_opt("sites", 0, "split tiles into sites (for IO only)");
     parser.add_opt("min-count", 1, "minimum number of samples for a feature");
     parser.add_positional("folder", false, "specimen folder");
 
