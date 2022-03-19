@@ -206,6 +206,14 @@ def build(seed):
             lut_outputs[i].add_cell_pin(lut.name, "O")
         des.add(lut)
     des.generate("io", seed, do_opt=True)
-
+    with open(f"work/io_{seed}_config.txt", "w") as f: # params that dump_design misses
+        for i, params in enumerate(io_config):
+            pin = used_pins[i]
+            cfg = " ".join(f'{k}={v}' for k, v in params.items())
+            print(f'pin p{i} {pin} {cfg}', file=f)
+        for bank, iref in sorted(bank_iref.items()):
+            if iref is None:
+                continue
+            print(f'bank {iref} INTERNAL_VREF={iref}', file=f)
 if __name__ == '__main__':
     build(int(sys.argv[1]))
